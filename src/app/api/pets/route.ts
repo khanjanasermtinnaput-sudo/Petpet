@@ -1,25 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { DEVICE_ID, getPet } from "@/lib/device";
 
 interface CreatePetBody {
-  deviceId?: string;
   name?: string;
-  species?: string;
-  ageYears?: number;
-  ageMonths?: number;
   weightKg?: number;
 }
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
 
   let body: CreatePetBody;
   try {
@@ -28,58 +17,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const { deviceId, name, species, ageYears, ageMonths, weightKg } = body;
+  const { name, weightKg } = body;
 
-  if (!deviceId || !name || !species || weightKg == null) {
-    return NextResponse.json(
-      { error: "deviceId, name, species, and weightKg are required" },
-      { status: 400 },
-    );
+  if (!name || weightKg == null) {
+    return NextResponse.json({ error: "name and weightKg are required" }, { status: 400 });
   }
 
-  const { error: deviceError } = await supabase
-    .from("devices")
-    .insert({ device_id: deviceId, user_id: user.id });
+  // Single-tenant app: at most one pet ever exists. Update it if present,
+  // otherwise create it.
+  const existing = await getPet(supabase);
 
-  if (deviceError) {
-    const isUniqueViolation = deviceError.code === "23505";
-    if (!isUniqueViolation) {
-      return NextResponse.json({ error: deviceError.message }, { status: 500 });
-    }
+  const query = existing
+    ? supabase.from("pets").update({ name, weight_kg: weightKg }).eq("id", existing.id)
+    : supabase.from("pets").insert({ device_id: DEVICE_ID, name, weight_kg: weightKg });
 
-    // RLS only lets us see devices we own, so a null result here means the
-    // serial is already claimed by a different account.
-    const { data: ownDevice } = await supabase
-      .from("devices")
-      .select("device_id")
-      .eq("device_id", deviceId)
-      .maybeSingle();
+  const { data: pet, error } = await query.select().single();
 
-    if (!ownDevice) {
-      return NextResponse.json(
-        { error: "อุปกรณ์นี้ถูกลงทะเบียนแล้วโดยบัญชีอื่น" },
-        { status: 409 },
-      );
-    }
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data: pet, error: petError } = await supabase
-    .from("pets")
-    .insert({
-      user_id: user.id,
-      device_id: deviceId,
-      name,
-      species,
-      age_years: ageYears ?? 0,
-      age_months: ageMonths ?? 0,
-      weight_kg: weightKg,
-    })
-    .select()
-    .single();
-
-  if (petError) {
-    return NextResponse.json({ error: petError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ pet }, { status: 201 });
+  return NextResponse.json({ pet }, { status: existing ? 200 : 201 });
 }

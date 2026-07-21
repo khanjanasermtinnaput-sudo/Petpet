@@ -66,7 +66,7 @@ export function DashboardClient({
     }
 
     const channel = supabase
-      .channel(`petpet-dashboard-${pet.device_id}`)
+      .channel(`Petpet-dashboard-${pet.device_id}`)
       .on<FeederReading>(
         "postgres_changes",
         {

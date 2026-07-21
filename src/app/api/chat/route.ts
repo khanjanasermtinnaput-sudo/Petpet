@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPet } from "@/lib/device";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -40,14 +41,6 @@ ${feedHistorySummary}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -69,11 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "messages is required" }, { status: 400 });
   }
 
-  const { data: pet } = await supabase
-    .from("pets")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const pet = await getPet(supabase);
 
   if (!pet) {
     return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยง" }, { status: 404 });

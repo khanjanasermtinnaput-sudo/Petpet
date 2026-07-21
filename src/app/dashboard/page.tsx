@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getPet } from "@/lib/device";
 import type { FeedEvent } from "@/lib/types";
 import { DashboardClient } from "./DashboardClient";
 
@@ -9,19 +10,13 @@ function startOfTodayIso(): string {
   return start.toISOString();
 }
 
+// Tray/tank readings, UV status, and feed history all change continuously —
+// must not be statically prerendered at build time.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const { data: pet } = await supabase
-    .from("pets")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const pet = await getPet(supabase);
 
   if (!pet) redirect("/onboarding");
 

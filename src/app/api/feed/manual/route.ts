@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPet } from "@/lib/device";
 import { computeDispenseAmount } from "@/lib/feeding-logic";
 import type { MealSlot } from "@/lib/types";
 
@@ -12,22 +13,9 @@ function currentMealSlot(): MealSlot {
 
 export async function POST() {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const pet = await getPet(supabase);
 
-  if (authError || !user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const { data: pet, error: petError } = await supabase
-    .from("pets")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (petError || !pet) {
+  if (!pet) {
     return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยง" }, { status: 404 });
   }
 

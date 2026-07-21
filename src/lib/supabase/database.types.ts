@@ -28,32 +28,6 @@ export type Database = {
           updated_at?: string;
           uv_status?: boolean;
         };
-        Relationships: [
-          {
-            foreignKeyName: "device_status_device_id_fkey";
-            columns: ["device_id"];
-            isOneToOne: true;
-            referencedRelation: "devices";
-            referencedColumns: ["device_id"];
-          },
-        ];
-      };
-      devices: {
-        Row: {
-          claimed_at: string;
-          device_id: string;
-          user_id: string;
-        };
-        Insert: {
-          claimed_at?: string;
-          device_id: string;
-          user_id: string;
-        };
-        Update: {
-          claimed_at?: string;
-          device_id?: string;
-          user_id?: string;
-        };
         Relationships: [];
       };
       feed_events: {
@@ -81,15 +55,7 @@ export type Database = {
           target_g?: number;
           ts?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "feed_events_device_id_fkey";
-            columns: ["device_id"];
-            isOneToOne: false;
-            referencedRelation: "devices";
-            referencedColumns: ["device_id"];
-          },
-        ];
+        Relationships: [];
       };
       feeder_readings: {
         Row: {
@@ -113,15 +79,7 @@ export type Database = {
           tank_weight_g?: number;
           tray_weight_g?: number;
         };
-        Relationships: [
-          {
-            foreignKeyName: "feeder_readings_device_id_fkey";
-            columns: ["device_id"];
-            isOneToOne: false;
-            referencedRelation: "devices";
-            referencedColumns: ["device_id"];
-          },
-        ];
+        Relationships: [];
       };
       pets: {
         Row: {
@@ -133,7 +91,6 @@ export type Database = {
           id: string;
           name: string;
           species: string;
-          user_id: string;
           weight_kg: number;
         };
         Insert: {
@@ -144,8 +101,7 @@ export type Database = {
           device_id: string;
           id?: string;
           name: string;
-          species: string;
-          user_id: string;
+          species?: string;
           weight_kg: number;
         };
         Update: {
@@ -157,25 +113,16 @@ export type Database = {
           id?: string;
           name?: string;
           species?: string;
-          user_id?: string;
           weight_kg?: number;
         };
-        Relationships: [
-          {
-            foreignKeyName: "pets_device_id_fkey";
-            columns: ["device_id"];
-            isOneToOne: false;
-            referencedRelation: "devices";
-            referencedColumns: ["device_id"];
-          },
-        ];
+        Relationships: [];
       };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      owns_device: { Args: { d: string }; Returns: boolean };
+      [_ in never]: never;
     };
     Enums: {
       [_ in never]: never;

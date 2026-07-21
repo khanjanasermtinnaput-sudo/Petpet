@@ -1,6 +1,5 @@
 import type { Tables } from "./supabase/database.types";
 
-export type Device = Tables<"devices">;
 export type Pet = Tables<"pets">;
 export type FeederReading = Tables<"feeder_readings">;
 export type DeviceStatus = Tables<"device_status">;
