@@ -5,8 +5,10 @@ import type { FeedEvent } from "@/lib/types";
 import { NavRail } from "@/components/dashboard/NavRail";
 import { WeeklyFeedChart, type DailyMealDatum } from "@/components/history/WeeklyFeedChart";
 
-// Feed history changes continuously — must not be statically prerendered.
-export const dynamic = "force-dynamic";
+// Daily/weekly aggregates don't need to be instantaneous — a short
+// revalidation window lets repeat nav clicks hit cache instead of paying a
+// full serverless + Supabase round trip every time.
+export const revalidate = 5;
 
 const DAY_LABEL_FORMAT = new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" });
 

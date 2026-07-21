@@ -5,9 +5,10 @@ import { NavRail } from "@/components/dashboard/NavRail";
 import { ScheduleClient } from "@/components/schedule/ScheduleClient";
 import type { FeedingSchedule } from "@/lib/types";
 
-// The schedule can change any time (AI generation) — must not be
-// statically prerendered at build time.
-export const dynamic = "force-dynamic";
+// The schedule rarely changes and the "generate" button updates its own
+// displayed state client-side without a page reload, so a short revalidation
+// window is safe and lets repeat nav clicks hit cache.
+export const revalidate = 5;
 
 export default async function SettingsPage() {
   const supabase = await createClient();
