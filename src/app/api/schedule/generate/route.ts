@@ -72,6 +72,10 @@ export async function POST() {
       model: "gemini-2.5-flash",
       config: {
         maxOutputTokens: 1024,
+        // Without this, gemini-2.5-flash's reasoning tokens are drawn from
+        // the same maxOutputTokens budget and can consume it entirely
+        // before any JSON is emitted, truncating the response mid-string.
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: SCHEDULE_SCHEMA,
       },
@@ -82,9 +86,14 @@ export async function POST() {
 
     const parsed = JSON.parse(response.text) as { meals: GeneratedMeal[] };
     meals = parsed.meals;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "เกิดข้อผิดพลาดจาก AI สัตวแพทย์";
-    return NextResponse.json({ error: message }, { status: 502 });
+  } catch {
+    // Don't leak raw SyntaxError/SDK error text (e.g. a JSON.parse failure
+    // on a truncated response) to the user — same friendly message as the
+    // validation-failure path below.
+    return NextResponse.json(
+      { error: "AI ไม่สามารถวางแผนตารางอาหารที่ถูกต้องได้ กรุณาลองใหม่" },
+      { status: 502 },
+    );
   }
 
   const bySlot = new Map(meals.map((m) => [m.meal_slot, m]));
