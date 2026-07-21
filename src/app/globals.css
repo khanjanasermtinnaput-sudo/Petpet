@@ -1,26 +1,105 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --neu-bg: #e8ecf1;
+  --neu-light: rgba(255, 255, 255, 0.8);
+  --neu-dark: rgba(163, 177, 198, 0.6);
+  --neu-accent: #7b6ef6;
+  --neu-warning: #f2994a;
+  --neu-ink: #3d4451;
+  --neu-ink-muted: #6b7280;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-neu-bg: var(--neu-bg);
+  --color-neu-accent: var(--neu-accent);
+  --color-neu-warning: var(--neu-warning);
+  --color-neu-ink: var(--neu-ink);
+  --color-neu-ink-muted: var(--neu-ink-muted);
+  --font-display: var(--font-prompt), var(--font-sarabun), sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --neu-bg: #e8ecf1;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--neu-bg);
+  color: var(--neu-ink);
+  font-family: var(--font-display);
+}
+
+/* Neumorphic surfaces — light source top-left, no hard borders. */
+
+.neu-raised {
+  --neu-shadow:
+    8px 8px 18px var(--neu-dark), -8px -8px 18px var(--neu-light);
+  box-shadow: var(--neu-shadow);
+  background: var(--neu-bg);
+  border-radius: 24px;
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.neu-raised-sm {
+  --neu-shadow:
+    4px 4px 10px var(--neu-dark), -4px -4px 10px var(--neu-light);
+  box-shadow: var(--neu-shadow);
+  background: var(--neu-bg);
+  border-radius: 12px;
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.neu-raised-round {
+  --neu-shadow:
+    4px 4px 10px var(--neu-dark), -4px -4px 10px var(--neu-light);
+  box-shadow: var(--neu-shadow);
+  background: var(--neu-bg);
+  border-radius: 9999px;
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.neu-inset {
+  --neu-shadow:
+    inset 3px 3px 8px var(--neu-dark), inset -3px -3px 8px var(--neu-light);
+  box-shadow: var(--neu-shadow);
+  background: var(--neu-bg);
+  border-radius: 12px;
+}
+
+.neu-pressed {
+  --neu-shadow:
+    inset 4px 4px 10px var(--neu-dark), inset -4px -4px 10px var(--neu-light);
+  box-shadow: var(--neu-shadow);
+}
+
+/* Soft accent focus glow layered on top of whichever neu-shadow is active. */
+.neu-focusable:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(123, 110, 246, 0.4),
+    var(--neu-shadow);
+}
+
+.neu-press-active:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neu-raised,
+  .neu-raised-sm,
+  .neu-raised-round,
+  .neu-press-active,
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
