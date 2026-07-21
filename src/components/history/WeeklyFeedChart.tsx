@@ -3,6 +3,7 @@
 import {
   Bar,
   BarChart,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -10,31 +11,19 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { NeuCard } from "@/components/neu/NeuCard";
-import type { MealSlot } from "@/lib/types";
 
-export interface MealSlotDatum {
-  slot: MealSlot;
-  labelTh: string;
-  target: number;
-  actual: number;
+export interface DailyMealDatum {
+  dateLabel: string;
+  breakfast: number;
+  lunch: number;
+  dinner: number;
 }
 
-const MEAL_SLOT_LABELS_TH: Record<MealSlot, string> = {
+const SERIES_LABELS_TH: Record<"breakfast" | "lunch" | "dinner", string> = {
   breakfast: "เช้า",
   lunch: "กลางวัน",
   dinner: "เย็น",
 };
-
-export function buildMealSlotData(
-  slotTotals: Record<MealSlot, { target: number; actual: number }>,
-): MealSlotDatum[] {
-  return (["breakfast", "lunch", "dinner"] as const).map((slot) => ({
-    slot,
-    labelTh: MEAL_SLOT_LABELS_TH[slot],
-    target: slotTotals[slot].target,
-    actual: slotTotals[slot].actual,
-  }));
-}
 
 function ChartTooltip({ active, payload, label }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
@@ -51,17 +40,17 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
   );
 }
 
-export function FeedHistoryChart({ data }: { data: MealSlotDatum[] }) {
+export function WeeklyFeedChart({ data }: { data: DailyMealDatum[] }) {
   return (
     <NeuCard>
       <h2 className="mb-4 text-sm font-semibold text-neu-ink-muted">
-        มื้ออาหารวันนี้
+        ปริมาณอาหารที่กินย้อนหลัง 7 วัน
       </h2>
-      <div className="h-64 w-full">
+      <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barGap={4}>
             <XAxis
-              dataKey="labelTh"
+              dataKey="dateLabel"
               stroke="var(--neu-ink-muted)"
               tickLine={false}
               axisLine={false}
@@ -73,18 +62,14 @@ export function FeedHistoryChart({ data }: { data: MealSlotDatum[] }) {
               width={36}
             />
             <Tooltip content={ChartTooltip} cursor={{ fill: "var(--neu-dark)", opacity: 0.2 }} />
-            <Bar
-              dataKey="target"
-              name="เป้าหมาย"
-              fill="var(--neu-dark)"
-              radius={[8, 8, 0, 0]}
+            <Legend
+              formatter={(value) =>
+                SERIES_LABELS_TH[value as keyof typeof SERIES_LABELS_TH] ?? value
+              }
             />
-            <Bar
-              dataKey="actual"
-              name="กินจริง"
-              fill="var(--neu-accent)"
-              radius={[8, 8, 0, 0]}
-            />
+            <Bar dataKey="breakfast" name={SERIES_LABELS_TH.breakfast} fill="var(--neu-accent)" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="lunch" name={SERIES_LABELS_TH.lunch} fill="var(--neu-warning)" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="dinner" name={SERIES_LABELS_TH.dinner} fill="var(--neu-ink-muted)" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

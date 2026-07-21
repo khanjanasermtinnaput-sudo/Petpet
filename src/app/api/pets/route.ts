@@ -4,6 +4,7 @@ import { DEVICE_ID, getPet } from "@/lib/device";
 
 interface CreatePetBody {
   name?: string;
+  species?: string;
   weightKg?: number;
 }
 
@@ -17,10 +18,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const { name, weightKg } = body;
+  const { name, species, weightKg } = body;
 
-  if (!name || weightKg == null) {
-    return NextResponse.json({ error: "name and weightKg are required" }, { status: 400 });
+  if (!name || !species || weightKg == null) {
+    return NextResponse.json(
+      { error: "name, species, and weightKg are required" },
+      { status: 400 },
+    );
   }
 
   // Single-tenant app: at most one pet ever exists. Update it if present,
@@ -28,8 +32,8 @@ export async function POST(request: Request) {
   const existing = await getPet(supabase);
 
   const query = existing
-    ? supabase.from("pets").update({ name, weight_kg: weightKg }).eq("id", existing.id)
-    : supabase.from("pets").insert({ device_id: DEVICE_ID, name, weight_kg: weightKg });
+    ? supabase.from("pets").update({ name, species, weight_kg: weightKg }).eq("id", existing.id)
+    : supabase.from("pets").insert({ device_id: DEVICE_ID, name, species, weight_kg: weightKg });
 
   const { data: pet, error } = await query.select().single();
 

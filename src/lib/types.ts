@@ -9,3 +9,10 @@ export type MealSlot = "breakfast" | "lunch" | "dinner";
 export type FeedEvent = Omit<Tables<"feed_events">, "meal_slot"> & {
   meal_slot: MealSlot;
 };
+
+export type ScheduleSource = "manual" | "ai";
+
+export type FeedingSchedule = Omit<Tables<"feeding_schedule">, "meal_slot" | "source"> & {
+  meal_slot: MealSlot;
+  source: ScheduleSource;
+};

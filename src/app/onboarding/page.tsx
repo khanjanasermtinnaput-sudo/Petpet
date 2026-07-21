@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { NeuButton } from "@/components/neu/NeuButton";
 import { NeuCard } from "@/components/neu/NeuCard";
 import { NeuInput } from "@/components/neu/NeuInput";
+import { NeuSelect } from "@/components/neu/NeuSelect";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [species, setSpecies] = useState("Dog");
   const [weightKg, setWeightKg] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,7 @@ export default function OnboardingPage() {
     const res = await fetch("/api/pets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, weightKg: Number(weightKg) }),
+      body: JSON.stringify({ name, species, weightKg: Number(weightKg) }),
     });
 
     setLoading(false);
@@ -50,6 +52,14 @@ export default function OnboardingPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+          <NeuSelect
+            label="ชนิดสัตว์เลี้ยง"
+            value={species}
+            onChange={(e) => setSpecies(e.target.value)}
+          >
+            <option value="Dog">หมา</option>
+            <option value="Cat">แมว</option>
+          </NeuSelect>
           <NeuInput
             label="น้ำหนัก (กก.)"
             type="number"

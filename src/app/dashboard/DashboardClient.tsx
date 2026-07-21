@@ -3,17 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isEatingLow, rollingAverageForSlot } from "@/lib/feeding-logic";
-import type { DeviceStatus, FeedEvent, FeederReading, MealSlot, Pet } from "@/lib/types";
+import type { DeviceStatus, FeedEvent, FeederReading, Pet } from "@/lib/types";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { TrayHeroCard } from "@/components/dashboard/TrayHeroCard";
-import { TankCard } from "@/components/dashboard/TankCard";
-import { FeedHistoryChart, buildMealSlotData } from "@/components/dashboard/FeedHistoryChart";
 import { LowEatingAlert } from "@/components/dashboard/LowEatingAlert";
 import { ManualFeedButton } from "@/components/dashboard/ManualFeedButton";
 import { NavRail } from "@/components/dashboard/NavRail";
 import { NeuToast } from "@/components/neu/NeuToast";
 
-const MEAL_SLOTS: readonly MealSlot[] = ["breakfast", "lunch", "dinner"];
 const POLL_INTERVAL_MS = 15_000;
 
 interface ManualFeedResponse {
@@ -26,7 +23,6 @@ interface DashboardClientProps {
   pet: Pet;
   initialReading: FeederReading | null;
   initialStatus: DeviceStatus | null;
-  initialTodayEvents: FeedEvent[];
   recentEvents: FeedEvent[];
 }
 
@@ -34,12 +30,10 @@ export function DashboardClient({
   pet,
   initialReading,
   initialStatus,
-  initialTodayEvents,
   recentEvents,
 }: DashboardClientProps) {
   const [reading, setReading] = useState(initialReading);
   const [status, setStatus] = useState(initialStatus);
-  const [todayEvents, setTodayEvents] = useState(initialTodayEvents);
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
     message: "",
@@ -108,26 +102,6 @@ export function DashboardClient({
     };
   }, [pet.device_id]);
 
-  const chartData = useMemo(() => {
-    const perSlotDefaultTarget = Math.round(pet.daily_target_g / MEAL_SLOTS.length);
-    const totals = Object.fromEntries(
-      MEAL_SLOTS.map((slot) => [slot, { target: 0, actual: 0, hasEvent: false }]),
-    ) as Record<MealSlot, { target: number; actual: number; hasEvent: boolean }>;
-
-    for (const event of todayEvents) {
-      const bucket = totals[event.meal_slot];
-      bucket.target += event.target_g;
-      bucket.actual += event.actual_eaten_g;
-      bucket.hasEvent = true;
-    }
-
-    for (const slot of MEAL_SLOTS) {
-      if (!totals[slot].hasEvent) totals[slot].target = perSlotDefaultTarget;
-    }
-
-    return buildMealSlotData(totals);
-  }, [todayEvents, pet.daily_target_g]);
-
   const showLowEatingAlert = useMemo(() => {
     const latestConsumed = recentEvents.find((e) => e.actual_eaten_g > 0);
     if (!latestConsumed) return false;
@@ -149,10 +123,6 @@ export function DashboardClient({
           message: `เทอาหารแล้ว ${Math.round(body.dispenseAmountG ?? 0)}g`,
           visible: true,
         });
-        if (body.feedEvent) {
-          const confirmedEvent = body.feedEvent;
-          setTodayEvents((prev) => [...prev, confirmedEvent]);
-        }
       }
     } catch {
       setToast({ message: "เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่", visible: true });
@@ -172,8 +142,6 @@ export function DashboardClient({
           trayWeightG={reading?.tray_weight_g ?? 0}
           targetG={pet.daily_target_g}
         />
-        <TankCard tankWeightG={reading?.tank_weight_g ?? 0} />
-        <FeedHistoryChart data={chartData} />
       </main>
       <ManualFeedButton onFeed={handleManualFeed} />
       <NeuToast message={toast.message} visible={toast.visible} />

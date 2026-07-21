@@ -9,9 +9,6 @@ import type { Pet } from "./types";
  */
 export const DEVICE_ID = "PETFEEDER-001";
 
-/** Reserve-tank capacity in grams. Not device-configurable yet — see AGENTS.md TODOs. */
-export const TANK_CAPACITY_G = 1000;
-
 export async function getPet(supabase: SupabaseClient<Database>): Promise<Pet | null> {
   const { data } = await supabase.from("pets").select("*").limit(1).maybeSingle();
   return data;

@@ -81,6 +81,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      feeding_schedule: {
+        Row: {
+          device_id: string;
+          id: string;
+          meal_slot: string;
+          source: string;
+          target_g: number;
+          time_of_day: string;
+          updated_at: string;
+        };
+        Insert: {
+          device_id: string;
+          id?: string;
+          meal_slot: string;
+          source?: string;
+          target_g: number;
+          time_of_day: string;
+          updated_at?: string;
+        };
+        Update: {
+          device_id?: string;
+          id?: string;
+          meal_slot?: string;
+          source?: string;
+          target_g?: number;
+          time_of_day?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       pets: {
         Row: {
           age_months: number;
