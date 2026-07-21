@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavRail } from "@/components/dashboard/NavRail";
+import { NeuThemeToggle } from "@/components/neu/NeuThemeToggle";
 import { ChatInput } from "@/components/vet/ChatInput";
 import { ChatMessage, type ChatMessageData } from "@/components/vet/ChatMessage";
 
@@ -74,8 +75,9 @@ export default function VetChatPage() {
 
   return (
     <div className="flex min-h-screen flex-col pb-28 md:pb-4 md:pl-24">
-      <header className="sticky top-0 z-30 bg-neu-bg/90 px-4 py-4 backdrop-blur-sm sm:px-8">
+      <header className="sticky top-0 z-30 flex items-center justify-between bg-neu-bg/90 px-4 py-4 backdrop-blur-sm sm:px-8">
         <h1 className="text-lg font-bold text-neu-ink">AI สัตวแพทย์</h1>
+        <NeuThemeToggle />
       </header>
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-3 px-4 pb-4 sm:px-8">

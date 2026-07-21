@@ -6,29 +6,39 @@
   --neu-dark: rgba(163, 177, 198, 0.6);
   --neu-accent: #7b6ef6;
   --neu-warning: #f2994a;
+  --neu-success: #45b18a;
   --neu-ink: #3d4451;
   --neu-ink-muted: #6b7280;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --neu-bg: #232838;
+  --neu-light: rgba(255, 255, 255, 0.045);
+  --neu-dark: rgba(0, 0, 0, 0.62);
+  --neu-accent: #9b8cfa;
+  --neu-warning: #f5a662;
+  --neu-success: #57c79a;
+  --neu-ink: #e8eaf3;
+  --neu-ink-muted: #9aa1b7;
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-neu-bg: var(--neu-bg);
   --color-neu-accent: var(--neu-accent);
   --color-neu-warning: var(--neu-warning);
+  --color-neu-success: var(--neu-success);
   --color-neu-ink: var(--neu-ink);
   --color-neu-ink-muted: var(--neu-ink-muted);
   --font-display: var(--font-prompt), var(--font-sarabun), sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --neu-bg: #e8ecf1;
-  }
 }
 
 body {
   background: var(--neu-bg);
   color: var(--neu-ink);
   font-family: var(--font-display);
+  transition: background-color 180ms ease, color 180ms ease;
 }
 
 /* Neumorphic surfaces — light source top-left, no hard borders. */

@@ -11,6 +11,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [species, setSpecies] = useState("Dog");
+  const [birthDate, setBirthDate] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ export default function OnboardingPage() {
     const res = await fetch("/api/pets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, species, weightKg: Number(weightKg) }),
+      body: JSON.stringify({ name, species, birthDate, weightKg: Number(weightKg) }),
     });
 
     setLoading(false);
@@ -60,6 +61,14 @@ export default function OnboardingPage() {
             <option value="Dog">หมา</option>
             <option value="Cat">แมว</option>
           </NeuSelect>
+          <NeuInput
+            label="วันเดือนปีเกิด"
+            type="date"
+            required
+            max={new Date().toISOString().slice(0, 10)}
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+          />
           <NeuInput
             label="น้ำหนัก (กก.)"
             type="number"

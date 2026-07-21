@@ -115,6 +115,7 @@ export type Database = {
         Row: {
           age_months: number;
           age_years: number;
+          birth_date: string | null;
           created_at: string;
           daily_target_g: number;
           device_id: string;
@@ -126,6 +127,7 @@ export type Database = {
         Insert: {
           age_months?: number;
           age_years?: number;
+          birth_date?: string | null;
           created_at?: string;
           daily_target_g?: number;
           device_id: string;
@@ -137,6 +139,7 @@ export type Database = {
         Update: {
           age_months?: number;
           age_years?: number;
+          birth_date?: string | null;
           created_at?: string;
           daily_target_g?: number;
           device_id?: string;

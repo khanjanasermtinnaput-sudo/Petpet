@@ -1,3 +1,4 @@
+import { NeuThemeToggle } from "@/components/neu/NeuThemeToggle";
 import { UvStatusPill } from "./UvStatusPill";
 
 export function TopBar({ petName, uvOn }: { petName: string; uvOn: boolean }) {
@@ -12,7 +13,10 @@ export function TopBar({ petName, uvOn }: { petName: string; uvOn: boolean }) {
         </div>
         <span className="text-lg font-bold text-neu-ink">{petName}</span>
       </div>
-      <UvStatusPill uvOn={uvOn} />
+      <div className="flex items-center gap-3">
+        <NeuThemeToggle />
+        <UvStatusPill uvOn={uvOn} />
+      </div>
     </header>
   );
 }
