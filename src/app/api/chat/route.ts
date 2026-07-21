@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getPet } from "@/lib/device";
@@ -42,10 +42,10 @@ ${feedHistorySummary}
 export async function POST(request: Request) {
   const supabase = await createClient();
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "ยังไม่ได้ตั้งค่า ANTHROPIC_API_KEY บนเซิร์ฟเวอร์" },
+      { error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY บนเซิร์ฟเวอร์" },
       { status: 500 },
     );
   }
@@ -83,24 +83,27 @@ export async function POST(request: Request) {
           .join("\n")
       : "ไม่มีข้อมูลการให้อาหารใน 24 ชั่วโมงที่ผ่านมา";
 
-  const anthropic = new Anthropic({ apiKey });
+  const ai = new GoogleGenAI({ apiKey });
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const anthropicStream = anthropic.messages.stream({
-          model: "claude-opus-4-8",
-          max_tokens: 1024,
-          system: buildSystemPrompt(pet, feedHistorySummary),
-          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        const geminiStream = await ai.models.generateContentStream({
+          model: "gemini-2.5-flash",
+          config: {
+            maxOutputTokens: 1024,
+            systemInstruction: buildSystemPrompt(pet, feedHistorySummary),
+          },
+          contents: messages.map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          })),
         });
 
-        anthropicStream.on("text", (textDelta) => {
-          controller.enqueue(encoder.encode(textDelta));
-        });
-
-        await anthropicStream.finalMessage();
+        for await (const chunk of geminiStream) {
+          if (chunk.text) controller.enqueue(encoder.encode(chunk.text));
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "เกิดข้อผิดพลาดจาก AI สัตวแพทย์";
         controller.enqueue(encoder.encode(`\n\n[error] ${message}`));

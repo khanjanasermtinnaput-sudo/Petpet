@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getPet } from "@/lib/device";
@@ -49,10 +49,10 @@ function buildPrompt(pet: { species: string; weight_kg: number; age_years: numbe
 }
 
 export async function POST() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "ยังไม่ได้ตั้งค่า ANTHROPIC_API_KEY บนเซิร์ฟเวอร์" },
+      { error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY บนเซิร์ฟเวอร์" },
       { status: 500 },
     );
   }
@@ -64,21 +64,23 @@ export async function POST() {
     return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยง" }, { status: 404 });
   }
 
-  const anthropic = new Anthropic({ apiKey });
+  const ai = new GoogleGenAI({ apiKey });
 
   let meals: GeneratedMeal[];
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 1024,
-      output_config: { format: { type: "json_schema", schema: SCHEDULE_SCHEMA } },
-      messages: [{ role: "user", content: buildPrompt(pet) }],
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      config: {
+        maxOutputTokens: 1024,
+        responseMimeType: "application/json",
+        responseSchema: SCHEDULE_SCHEMA,
+      },
+      contents: [{ role: "user", parts: [{ text: buildPrompt(pet) }] }],
     });
 
-    const textBlock = response.content.find((block) => block.type === "text");
-    if (!textBlock) throw new Error("no text block in response");
+    if (!response.text) throw new Error("no text in response");
 
-    const parsed = JSON.parse(textBlock.text) as { meals: GeneratedMeal[] };
+    const parsed = JSON.parse(response.text) as { meals: GeneratedMeal[] };
     meals = parsed.meals;
   } catch (err) {
     const message = err instanceof Error ? err.message : "เกิดข้อผิดพลาดจาก AI สัตวแพทย์";
