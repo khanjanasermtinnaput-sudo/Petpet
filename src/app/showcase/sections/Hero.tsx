@@ -23,7 +23,7 @@ export function Hero() {
         <div className="hero-text-col">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.04] px-4 py-1.5 text-[13px] font-semibold text-[var(--showcase-ink-muted)] backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-[var(--showcase-accent)] shadow-[0_0_10px_var(--showcase-accent)]" />
-            รีวิวการใช้งานจริง · Petpet
+            พาชมการใช้งาน · Petpet
           </span>
 
           <h1 className="mt-6 text-[clamp(2.6rem,6vw,4.4rem)] font-bold leading-[1.08] tracking-tight">
@@ -40,12 +40,18 @@ export function Hero() {
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-4">
-            <span className="rounded-2xl bg-[var(--showcase-accent)] px-7 py-3.5 font-semibold text-white shadow-[0_10px_30px_-8px_rgba(123,110,246,.8)]">
-              ดูรีวิวทั้งหมด
-            </span>
-            <span className="rounded-2xl border border-white/12 px-7 py-3.5 font-semibold text-[var(--showcase-ink)]">
-              ฟีเจอร์ในแอป
-            </span>
+            <a
+              href="#feature-showcase"
+              className="cta-button rounded-2xl bg-[var(--showcase-accent)] px-7 py-3.5 font-semibold text-white shadow-[0_10px_30px_-8px_rgba(123,110,246,.8)]"
+            >
+              ดูฟีเจอร์ในแอป
+            </a>
+            <a
+              href="/onboarding"
+              className="cta-button rounded-2xl border border-white/12 px-7 py-3.5 font-semibold text-[var(--showcase-ink)]"
+            >
+              เริ่มต้นใช้งาน
+            </a>
           </div>
         </div>
 

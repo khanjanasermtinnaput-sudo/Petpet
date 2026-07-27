@@ -1,7 +1,11 @@
-# Petpet showcase — standalone
+# Petpet showcase
+
+พาชมการใช้งานแอป Petpet (เครื่องให้อาหารสัตว์เลี้ยงอัจฉริยะ) — single-page,
+scroll-animated, ภาษาไทย ดีไซน์แบบ neumorphic ตามแอปจริง
 
 `index.html` is the whole site: markup, styles and animation in one file. No
-build step, no npm install, no server required — open it directly in a browser.
+build step, no npm install, no server required — open it directly in a browser,
+or serve the repo as a static site (e.g. GitHub Pages).
 
 ## GSAP
 
@@ -18,8 +22,8 @@ Delete it if you only ever serve this online — `index.html` alone is enough.
 Prompt and Sarabun come from Google Fonts. Offline, the browser falls back to a
 system Thai font; the layout is unaffected.
 
-## Relation to the Next.js route
+## Relation to the main app
 
-This is a port of the `/showcase` route in `src/app/showcase/`. Same design
-tokens, same copy, same animation. Edits to one do **not** propagate to the
-other — if you change a feature description or a stat here, change it there too.
+This is a standalone port of the `/showcase` route from the main Petpet
+Next.js app. Same design tokens, same copy, same animation. Edits to one do
+**not** propagate to the other.

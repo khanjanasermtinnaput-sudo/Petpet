@@ -5,8 +5,6 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Hero } from "./sections/Hero";
 import { FeatureShowcase } from "./sections/FeatureShowcase";
-import { StatsBand } from "./sections/StatsBand";
-import { Reviews } from "./sections/Reviews";
 import { ClosingCta } from "./sections/ClosingCta";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -167,28 +165,7 @@ export function ShowcaseClient() {
           );
         });
 
-        gsap.utils.toArray<HTMLElement>(".stat-value").forEach((el) => {
-          const target = Number(el.dataset.countTo ?? 0);
-          const decimals = Number(el.dataset.countDecimals ?? 0);
-          const suffix = el.dataset.countSuffix ?? "";
-          const counter = { value: 0 };
-
-          gsap.to(counter, {
-            value: target,
-            duration: 1.8,
-            ease: "power3.out",
-            scrollTrigger: { trigger: el, start: "top 85%", toggleActions: "play none none none" },
-            onUpdate: () => {
-              el.textContent =
-                counter.value.toLocaleString("th-TH", {
-                  minimumFractionDigits: decimals,
-                  maximumFractionDigits: decimals,
-                }) + suffix;
-            },
-          });
-        });
-
-        gsap.utils.toArray<HTMLElement>(".review-card, .cta-button").forEach((card) => {
+        gsap.utils.toArray<HTMLElement>(".cta-button").forEach((card) => {
           const enter = () =>
             gsap.to(card, { y: -8, scale: 1.02, duration: 0.4, ease: "back.out(1.4)" });
           const leave = () => gsap.to(card, { y: 0, scale: 1, duration: 0.4, ease: "power2.out" });
@@ -217,8 +194,6 @@ export function ShowcaseClient() {
     <div ref={root} className="showcase-root">
       <Hero />
       <FeatureShowcase />
-      <StatsBand />
-      <Reviews />
       <ClosingCta />
     </div>
   );

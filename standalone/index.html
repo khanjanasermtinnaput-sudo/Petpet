@@ -324,38 +324,6 @@ h1.hero-title .accent { color: var(--showcase-accent); }
 .phone-screen-stack { display: grid; height: 100%; }
 .phone-screen-view { grid-area: 1 / 1; }
 
-.stats { padding-block: 112px; }
-.stats-panel {
-  padding: 56px 32px;
-  border: 1px solid rgba(255,255,255,.08);
-  background: var(--showcase-panel);
-  border-radius: 32px;
-}
-.stats-panel > h2 { max-width: 36rem; margin-bottom: 48px; font-size: clamp(1.6rem, 3.4vw, 2.4rem); font-weight: 700; line-height: 1.2; }
-.stat-grid { display: grid; gap: 40px; }
-.stat-value { font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 700; line-height: 1; letter-spacing: -.02em; color: var(--showcase-accent); }
-.stat-label { margin-top: 12px; font-weight: 600; }
-.stat-note { margin-top: 4px; font-size: .875rem; color: var(--showcase-ink-muted); }
-
-.reviews { padding-bottom: 112px; }
-.masonry { columns: 1; column-gap: 24px; }
-.review-card {
-  break-inside: avoid;
-  margin-bottom: 24px;
-  padding: 28px;
-  border: 1px solid rgba(255,255,255,.08);
-  background: var(--showcase-panel);
-  border-radius: 24px;
-}
-.stars { font-size: .875rem; letter-spacing: .15em; color: #f2994a; }
-.stars .off { color: rgba(255,255,255,.15); }
-.review-card p { margin-top: 16px; }
-.review-by { display: flex; align-items: center; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.08); }
-.review-by .av { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(123,110,246,.15); font-size: 18px; }
-.review-by b { display: block; font-weight: 600; }
-.review-by span { display: block; font-size: .875rem; color: var(--showcase-ink-muted); }
-.disclaimer { margin-top: 40px; text-align: center; font-size: .75rem; color: var(--showcase-ink-muted); }
-
 .cta { position: relative; overflow: hidden; padding-top: 32px; padding-bottom: 128px; }
 .cta-glow {
   position: absolute; left: 50%; top: 50%;
@@ -406,9 +374,6 @@ h1.hero-title .accent { color: var(--showcase-accent); }
   .hero-inner { grid-template-columns: 1fr 1fr; }
   .hero-phone-col { justify-content: flex-end; }
   .feature-grid { grid-template-columns: 1fr auto; gap: 80px; }
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .masonry { columns: 2; }
-  .stats-panel { padding-inline: 56px; }
 
   #feature-window {
     height: 72vh;
@@ -417,11 +382,6 @@ h1.hero-title .accent { color: var(--showcase-accent); }
     mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 80%, transparent 100%);
   }
   .feature-block { height: 24vh; }
-}
-
-@media (min-width: 1024px) {
-  .stat-grid { grid-template-columns: repeat(4, 1fr); }
-  .masonry { columns: 3; }
 }
 
 /* Without JS (or if the GSAP CDN is blocked) everything must still read. */
@@ -442,7 +402,7 @@ h1.hero-title .accent { color: var(--showcase-accent); }
 
   <div class="wrap hero-inner">
     <div class="hero-text-col">
-      <span class="eyebrow"><i></i>รีวิวการใช้งานจริง · Petpet</span>
+      <span class="eyebrow"><i></i>พาชมการใช้งาน · Petpet</span>
 
       <h1 class="hero-title">
         ให้อาหารน้อง<br />
@@ -456,8 +416,8 @@ h1.hero-title .accent { color: var(--showcase-accent); }
       </p>
 
       <div class="hero-actions">
-        <a class="btn btn-primary cta-button" href="#reviews">ดูรีวิวทั้งหมด</a>
-        <a class="btn btn-ghost cta-button" href="#feature-showcase">ฟีเจอร์ในแอป</a>
+        <a class="btn btn-primary cta-button" href="#feature-showcase">ดูฟีเจอร์ในแอป</a>
+        <a class="btn btn-ghost cta-button" href="/onboarding">เริ่มต้นใช้งาน</a>
       </div>
     </div>
 
@@ -551,49 +511,6 @@ h1.hero-title .accent { color: var(--showcase-accent); }
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ===================== STATS ===================== -->
-<section class="stats reveal-section">
-  <div class="wrap stats-panel">
-    <h2>ตัวเลขจากการใช้งานจริง</h2>
-    <div class="stat-grid">
-      <div>
-        <p class="stat-value" data-count-to="12480" data-count-decimals="0" data-count-suffix="">12,480</p>
-        <p class="stat-label">มื้อที่เทอัตโนมัติ</p>
-        <p class="stat-note">จากผู้ใช้ช่วงทดลอง</p>
-      </div>
-      <div>
-        <p class="stat-value" data-count-to="98.6" data-count-decimals="1" data-count-suffix="%">98.6%</p>
-        <p class="stat-label">ความแม่นยำการชั่ง</p>
-        <p class="stat-note">เทียบกับตาชั่งดิจิทัล</p>
-      </div>
-      <div>
-        <p class="stat-value" data-count-to="3.2" data-count-decimals="1" data-count-suffix=" วิ">3.2 วิ</p>
-        <p class="stat-label">เวลาเฉลี่ยต่อการเท</p>
-        <p class="stat-note">ตั้งแต่สั่งจนอาหารลงถาด</p>
-      </div>
-      <div>
-        <p class="stat-value" data-count-to="24" data-count-decimals="0" data-count-suffix="/7">24/7</p>
-        <p class="stat-label">UV-C ฆ่าเชื้อในถาด</p>
-        <p class="stat-note">ทำงานรอบอัตโนมัติ</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== REVIEWS ===================== -->
-<section class="reviews" id="reviews">
-  <div class="wrap">
-    <div class="section-head reveal-section" style="padding-top:0">
-      <p class="kicker">เสียงจากผู้ใช้</p>
-      <h2>คนเลี้ยงสัตว์เขาว่ายังไงกันบ้าง</h2>
-    </div>
-
-    <div class="masonry" id="review-grid"></div>
-
-    <p class="disclaimer">รีวิวข้างต้นเป็นตัวอย่างประกอบการออกแบบหน้าเว็บ ไม่ใช่คำรับรองจากผู้ใช้จริง</p>
   </div>
 </section>
 
@@ -765,26 +682,6 @@ if (!window.gsap) {
     el.innerHTML = SCREENS[el.dataset.screen];
   });
 
-  /* ================= reviews ================= */
-
-  var REVIEWS = [
-    ["ณิชา", "เจ้าโมจิ · แมวสก็อตติช", 5, "ทำงานกะดึกแล้วไม่ต้องกังวลเลยค่ะ เปิดแอปดูวงแหวนก็รู้ว่าโมจิกินไปกี่กรัมแล้ว จากเดิมที่ได้แค่เดาว่าชามหมดหรือยัง"],
-    ["กฤต", "เจ้าบุญมี · โกลเด้น", 5, "ชอบกราฟ 7 วันมาก เห็นเลยว่าบุญมีกินน้อยลงตั้งแต่วันพุธ พาไปหาหมอทัน ปรากฏว่าฟันมีปัญหาจริง ๆ ถ้าไม่มีกราฟนี้คงไม่ทันสังเกต"],
-    ["พิมพ์ชนก", "เจ้าถั่วเขียว · แมวไทย", 4, "ถาม AI สัตวแพทย์ตอนตีสองได้ ตอบไทยชัดเจนและอ้างอิงประวัติการกินของถั่วเขียวจริง ๆ ไม่ใช่ตอบกว้าง ๆ แบบที่เคยเจอ"],
-    ["อนุชา", "เจ้าข้าวปั้น · ชิบะ", 5, "ตั้งค่าครั้งแรกใช้เวลาไม่ถึงนาที กรอกแค่ชื่อ วันเกิด น้ำหนัก แล้วมันคำนวณปริมาณต่อวันให้เอง ไม่ต้องนั่งหาข้อมูลเอง"],
-    ["สุธาสินี", "เจ้ามินิ · ปอมเมอเรเนียน", 5, "หลอด UV ทำงานทุกรอบหลังกินเสร็จ ถาดไม่มีกลิ่นติดเหมือนเครื่องเก่าเลย ล้างง่ายขึ้นเยอะค่ะ"],
-    ["ธีรภัทร", "เจ้าโอปอล์ · แมวเปอร์เซีย", 4, "แจ้งเตือนตอนกินน้อยกว่าปกติแม่นดี กดจากการแจ้งเตือนไปถาม AI ต่อได้เลยในหน้าเดียว ไม่ต้องเล่าประวัติซ้ำ"]
-  ];
-
-  document.getElementById("review-grid").innerHTML = REVIEWS.map(function (r) {
-    return '<article class="review-card reveal-section">' +
-      '<span class="stars" aria-label="' + r[2] + ' จาก 5 ดาว">' +
-        "★".repeat(r[2]) + '<span class="off">' + "★".repeat(5 - r[2]) + "</span></span>" +
-      "<p>" + r[3] + "</p>" +
-      '<div class="review-by"><span class="av">🐾</span><span><b>' + r[0] + "</b><span>" + r[1] + "</span></span></div>" +
-    "</article>";
-  }).join("");
-
   /* ================= animation ================= */
 
   document.body.classList.remove("no-js");
@@ -900,24 +797,7 @@ if (!window.gsap) {
         });
     });
 
-    gsap.utils.toArray(".stat-value").forEach(function (el) {
-      var target = Number(el.dataset.countTo || 0);
-      var decimals = Number(el.dataset.countDecimals || 0);
-      var suffix = el.dataset.countSuffix || "";
-      var counter = { value: 0 };
-
-      gsap.to(counter, {
-        value: target, duration: 1.8, ease: "power3.out",
-        scrollTrigger: { trigger: el, start: "top 85%", toggleActions: "play none none none" },
-        onUpdate: function () {
-          el.textContent = counter.value.toLocaleString("th-TH", {
-            minimumFractionDigits: decimals, maximumFractionDigits: decimals
-          }) + suffix;
-        }
-      });
-    });
-
-    gsap.utils.toArray(".review-card, .cta-button").forEach(function (card) {
+    gsap.utils.toArray(".cta-button").forEach(function (card) {
       function enter() { gsap.to(card, { y: -8, scale: 1.02, duration: .4, ease: "back.out(1.4)" }); }
       function leave() { gsap.to(card, { y: 0, scale: 1, duration: .4, ease: "power2.out" }); }
       card.addEventListener("mouseenter", enter);
