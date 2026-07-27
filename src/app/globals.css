@@ -102,6 +102,120 @@ body {
   transform: scale(0.97);
 }
 
+/* ---------------------------------------------------------------
+   Showcase landing page (/showcase)
+
+   The marketing page is dark-chrome regardless of the visitor's app
+   theme, with the neumorphic phone kept light so it reads as the one
+   bright object on the page.
+   --------------------------------------------------------------- */
+
+/* body still paints var(--neu-bg), which is pale for light-theme
+   visitors and would flash on overscroll. */
+:root:has(.showcase-root) body {
+  background: var(--showcase-bg);
+}
+
+.showcase-root {
+  --showcase-bg: #0e1018;
+  --showcase-panel: #161a26;
+  --showcase-ink: #f2f4fb;
+  --showcase-ink-muted: #99a0b8;
+  --showcase-accent: #7b6ef6;
+  background: var(--showcase-bg);
+  color: var(--showcase-ink);
+  overflow-x: clip;
+}
+
+/* Re-declare the light token block so the shipped .neu-* utilities
+   resolve to light-mode values inside the phone. Values are copied
+   verbatim from :root above — the phone must look like the real app. */
+.phone-light {
+  --neu-bg: #e8ecf1;
+  --neu-light: rgba(255, 255, 255, 0.8);
+  --neu-dark: rgba(163, 177, 198, 0.6);
+  --neu-accent: #7b6ef6;
+  --neu-warning: #f2994a;
+  --neu-success: #45b18a;
+  --neu-ink: #3d4451;
+  --neu-ink-muted: #6b7280;
+  color-scheme: light;
+}
+
+#phone-mockup-sticky {
+  height: fit-content;
+}
+
+.feature-block {
+  display: flex;
+  align-items: center;
+  opacity: 0.35;
+}
+
+/* Below the pin breakpoint there is no pin: blocks stack, the page scrolls,
+   and plain CSS sticky holds the phone (which behaves on mobile Safari,
+   unlike a JS pin). */
+@media (max-width: 768px) {
+  #phone-mockup-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    /* Full-bleed opaque band (cancels the section's px-6) so feature text
+       scrolls cleanly out of sight underneath instead of colliding with
+       the phone. The tail fades rather than cutting off hard. */
+    margin-inline: -1.5rem;
+    padding: 2.5vh 1.5rem 1.25rem;
+    background: linear-gradient(
+      to bottom,
+      var(--showcase-bg) 0%,
+      var(--showcase-bg) 90%,
+      transparent 100%
+    );
+  }
+
+  .feature-block {
+    min-height: 46vh;
+  }
+}
+
+/* At and above the pin breakpoint the whole section is pinned, and
+   #feature-list is translated inside this fixed-height window. Three blocks
+   are visible at a time so the neighbours read as dimmed context. */
+@media (min-width: 769px) {
+  #feature-window {
+    height: 72vh;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 20%,
+      #000 80%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 20%,
+      #000 80%,
+      transparent 100%
+    );
+  }
+
+  .feature-block {
+    height: 24vh;
+  }
+}
+
+/* Stacked screens in the pinned viewport: all share one grid cell so
+   GSAP can cross-fade them without any layout animation. */
+.phone-screen-stack {
+  display: grid;
+}
+
+.phone-screen-view {
+  grid-area: 1 / 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .neu-raised,
   .neu-raised-sm,
