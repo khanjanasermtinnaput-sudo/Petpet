@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>รีวิว Petpet — เครื่องให้อาหารสัตว์เลี้ยงอัจฉริยะ</title>
+<meta name="description" content="รีวิวการใช้งานแอป Petpet: ชั่งน้ำหนักอาหารในถาดแบบเรียลไทม์ ดูประวัติการกิน 7 วัน และถาม AI สัตวแพทย์เป็นภาษาไทย" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet" />
+
+<style>
+/* ==========================================================================
+   Petpet showcase — standalone single file.
+   Design tokens are copied verbatim from the app's globals.css.
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body, h1, h2, h3, p, figure { margin: 0; }
+
+:root {
+  --showcase-bg: #0e1018;
+  --showcase-panel: #161a26;
+  --showcase-ink: #f2f4fb;
+  --showcase-ink-muted: #99a0b8;
+  --showcase-accent: #7b6ef6;
+}
+
+/* Light neumorphic tokens — scoped to the phone so it stays bright against
+   the dark page. Values are the app's light-mode tokens, unchanged. */
+.phone-light {
+  --neu-bg: #e8ecf1;
+  --neu-light: rgba(255, 255, 255, 0.8);
+  --neu-dark: rgba(163, 177, 198, 0.6);
+  --neu-accent: #7b6ef6;
+  --neu-warning: #f2994a;
+  --neu-success: #45b18a;
+  --neu-ink: #3d4451;
+  --neu-ink-muted: #6b7280;
+  color-scheme: light;
+}
+
+body {
+  background: var(--showcase-bg);
+  color: var(--showcase-ink);
+  font-family: "Prompt", "Sarabun", system-ui, sans-serif;
+  line-height: 1.6;
+  overflow-x: clip;
+}
+
+.wrap { width: 100%; max-width: 1152px; margin-inline: auto; }
+section { padding-inline: 24px; }
+
+/* ---------- neumorphic surfaces (from globals.css) ---------- */
+.neu-raised {
+  box-shadow: 8px 8px 18px var(--neu-dark), -8px -8px 18px var(--neu-light);
+  background: var(--neu-bg);
+  border-radius: 24px;
+}
+.neu-raised-sm {
+  box-shadow: 4px 4px 10px var(--neu-dark), -4px -4px 10px var(--neu-light);
+  background: var(--neu-bg);
+  border-radius: 12px;
+}
+.neu-raised-round {
+  box-shadow: 4px 4px 10px var(--neu-dark), -4px -4px 10px var(--neu-light);
+  background: var(--neu-bg);
+  border-radius: 9999px;
+}
+.neu-inset {
+  box-shadow: inset 3px 3px 8px var(--neu-dark), inset -3px -3px 8px var(--neu-light);
+  background: var(--neu-bg);
+  border-radius: 12px;
+}
+
+/* ---------- iPhone shell (pure CSS) ---------- */
+.phone { position: relative; width: 300px; }
+.phone-btn { position: absolute; background: #2b2f3a; }
+.phone-btn.l { left: -3px; width: 3px; border-radius: 2px 0 0 2px; }
+.phone-btn.r { right: -3px; width: 3px; border-radius: 0 2px 2px 0; }
+.phone-btn.b1 { top: 104px; height: 28px; }
+.phone-btn.b2 { top: 148px; height: 48px; }
+.phone-btn.b3 { top: 208px; height: 48px; }
+.phone-btn.b4 { top: 168px; height: 80px; }
+
+.phone-bezel {
+  position: relative;
+  border-radius: 48px;
+  padding: 10px;
+  background: linear-gradient(155deg, #4a4f5e 0%, #22262f 38%, #31363f 62%, #191c23 100%);
+  box-shadow:
+    0 40px 80px -20px rgba(0, 0, 0, .75),
+    0 0 0 1px rgba(255, 255, 255, .09),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.phone-well {
+  position: relative;
+  height: 620px;
+  overflow: hidden;
+  border-radius: 38px;
+  background: var(--neu-bg);
+}
+.dynamic-island {
+  position: absolute;
+  left: 50%; top: 10px;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: 86px; height: 26px;
+  border-radius: 9999px;
+  background: #000;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 10px;
+  pointer-events: none;
+}
+.dynamic-island i { width: 7px; height: 7px; border-radius: 50%; background: #1b2735; }
+
+/* ---------- shared screen chrome ---------- */
+/* The injected wrapper needs an explicit height, otherwise .screen's
+   height:100% resolves against an auto-height parent and the nav rail
+   stops sitting at the bottom of the phone. */
+[data-screen] { height: 100%; }
+.screen { display: flex; flex-direction: column; height: 100%; background: var(--neu-bg); }
+.statusbar {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px 4px;
+  font-size: 11px; font-weight: 600; color: var(--neu-ink);
+}
+.sb-bars { display: inline-flex; align-items: flex-end; gap: 2px; }
+.sb-bars i { width: 3px; border-radius: 1px; background: var(--neu-ink); }
+.sb-bars i:nth-child(1) { height: 4px; }
+.sb-bars i:nth-child(2) { height: 6px; }
+.sb-bars i:nth-child(3) { height: 8px; }
+.sb-bars i:nth-child(4) { height: 10px; opacity: .3; }
+.sb-batt {
+  display: inline-block; width: 18px; height: 10px; margin-left: 4px;
+  border: 1px solid; border-color: color-mix(in srgb, var(--neu-ink) 50%, transparent);
+  border-radius: 3px; padding: 1.5px;
+}
+.sb-batt span { display: block; height: 100%; width: 66%; border-radius: 1px; background: var(--neu-ink); }
+.sb-right { display: flex; align-items: center; gap: 4px; }
+
+.navrail {
+  margin-top: auto; flex-shrink: 0;
+  display: flex; justify-content: space-around;
+  padding: 8px;
+  background: color-mix(in srgb, var(--neu-bg) 90%, transparent);
+}
+.navrail span {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 8px; border-radius: 12px;
+  font-size: 9px; font-weight: 600; color: var(--neu-ink-muted);
+}
+.navrail span em { font-style: normal; font-size: 16px; }
+.navrail span.on {
+  color: var(--neu-accent);
+  box-shadow: inset 3px 3px 8px var(--neu-dark), inset -3px -3px 8px var(--neu-light);
+}
+
+.screen-body { flex: 1; display: flex; flex-direction: column; gap: 12px; padding-inline: 16px; }
+
+/* ---------- dashboard ---------- */
+.dash-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
+.dash-pet { display: flex; align-items: center; gap: 8px; }
+.dash-avatar { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.dash-name { font-size: 16px; font-weight: 700; color: var(--neu-ink); }
+.uv-pill { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+.uv-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neu-accent); box-shadow: 0 0 8px var(--neu-accent); }
+.uv-pill b { font-size: 10px; font-weight: 600; color: var(--neu-ink); }
+
+.alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--neu-warning);
+}
+.alert p { font-size: 11px; font-weight: 600; color: var(--neu-warning); }
+.alert a { display: inline-block; margin-top: 2px; font-size: 10px; font-weight: 600; color: var(--neu-accent); text-decoration: underline; text-underline-offset: 2px; }
+.alert .x { flex-shrink: 0; color: var(--neu-ink-muted); font-size: 12px; }
+
+.tray-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px; }
+.tray-card h2 { font-size: 11px; font-weight: 600; color: var(--neu-ink-muted); }
+.ring { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 158px; height: 158px; }
+.ring svg { transform: rotate(-90deg); }
+.ring-label { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.ring-label b { font-size: 30px; font-weight: 700; color: var(--neu-ink); }
+.ring-label span { font-size: 12px; color: var(--neu-ink-muted); }
+
+.fab-row { display: flex; justify-content: center; padding-bottom: 8px; }
+.fab { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; color: var(--neu-accent); }
+
+/* ---------- history ---------- */
+.hist-head { padding: 12px 16px; }
+.hist-head h1 { font-size: 16px; font-weight: 700; color: var(--neu-ink); }
+.chart-card { padding: 16px 12px; }
+.chart-card h2 { margin-bottom: 12px; font-size: 11px; font-weight: 600; color: var(--neu-ink-muted); }
+.chart-row { display: flex; gap: 6px; }
+.y-axis { flex-shrink: 0; width: 24px; height: 180px; display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 9px; color: var(--neu-ink-muted); }
+.bars { flex: 1; height: 180px; display: flex; align-items: flex-end; justify-content: space-between; gap: 4px; }
+.day { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.day i { width: 5px; border-radius: 6px 6px 0 0; }
+.x-axis { display: flex; gap: 6px; margin-top: 6px; }
+.x-axis .pad { flex-shrink: 0; width: 24px; }
+.x-axis .days { flex: 1; display: flex; justify-content: space-between; gap: 4px; }
+.x-axis .days span { flex: 1; text-align: center; font-size: 9px; color: var(--neu-ink-muted); }
+.legend { display: flex; justify-content: center; gap: 12px; margin-top: 12px; }
+.legend span { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--neu-ink-muted); }
+.legend i { width: 6px; height: 6px; border-radius: 50%; }
+.hist-stats { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.hist-stat { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
+.hist-stat span { font-size: 11px; color: var(--neu-ink-muted); }
+.hist-stat b { font-size: 14px; font-weight: 700; color: var(--neu-ink); }
+.hist-stat b.warn { color: var(--neu-warning); }
+
+/* ---------- vet ---------- */
+.vet-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; }
+.vet-avatar { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.vet-head h1 { font-size: 14px; font-weight: 700; color: var(--neu-ink); }
+.vet-head p { font-size: 9px; color: var(--neu-ink-muted); }
+.chat { flex: 1; display: flex; flex-direction: column; gap: 8px; padding-inline: 12px; overflow: hidden; }
+.msg { display: flex; }
+.msg.me { justify-content: flex-end; }
+.msg p { max-width: 80%; padding: 8px 12px; font-size: 11px; line-height: 1.55; color: var(--neu-ink); }
+.msg.me p { color: var(--neu-accent); }
+.chat-input { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 12px; }
+.chat-input .field { flex: 1; padding: 8px 12px; font-size: 11px; color: var(--neu-ink-muted); }
+.chat-input .send { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--neu-accent); }
+
+/* ---------- onboarding ---------- */
+.ob { display: flex; flex: 1; align-items: center; justify-content: center; padding-inline: 16px; }
+.ob-card { width: 100%; padding: 24px 20px; }
+.ob-card h1 { text-align: center; font-size: 20px; font-weight: 700; color: var(--neu-ink); }
+.ob-card > p { margin-bottom: 20px; text-align: center; font-size: 11px; color: var(--neu-ink-muted); }
+.ob-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.ob-field span { font-size: 10px; font-weight: 600; color: var(--neu-ink-muted); }
+.ob-field .val { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 11px; color: var(--neu-ink); }
+.ob-submit { display: block; margin-top: 8px; padding: 10px 16px; text-align: center; font-size: 12px; font-weight: 600; color: var(--neu-accent); }
+
+/* ==========================================================================
+   Page sections
+   ========================================================================== */
+
+.hero {
+  position: relative;
+  display: flex; align-items: center;
+  min-height: 100vh;
+  padding-block: 96px;
+  overflow: hidden;
+}
+.hero-glow {
+  position: absolute;
+  left: 50%; top: 33%;
+  z-index: 0;
+  width: 900px; height: 900px;
+  transform: translate(-50%, -33%);
+  border-radius: 50%;
+  pointer-events: none;
+  /* No blur filter: the gradient is already soft, and a large blur both
+     flattens the peak alpha and is costly to repaint each parallax frame. */
+  background: radial-gradient(circle,
+    rgba(123,110,246,.40) 0%,
+    rgba(123,110,246,.18) 35%,
+    rgba(123,110,246,.05) 55%,
+    transparent 72%);
+}
+.hero-inner {
+  position: relative; z-index: 10;
+  display: grid; gap: 56px; align-items: center;
+}
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 16px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  border-radius: 9999px;
+  font-size: 13px; font-weight: 600; color: var(--showcase-ink-muted);
+  backdrop-filter: blur(6px);
+}
+.eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--showcase-accent); box-shadow: 0 0 10px var(--showcase-accent); }
+
+h1.hero-title {
+  margin-top: 24px;
+  font-size: clamp(2.6rem, 6vw, 4.4rem);
+  font-weight: 700; line-height: 1.08; letter-spacing: -.02em;
+}
+h1.hero-title .accent { color: var(--showcase-accent); }
+.hero-lead { max-width: 28rem; margin-top: 24px; font-size: 1.125rem; color: var(--showcase-ink-muted); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 36px; }
+
+.btn {
+  display: inline-block;
+  padding: 14px 28px;
+  border-radius: 16px;
+  font-weight: 600; text-decoration: none;
+}
+.btn-primary { background: var(--showcase-accent); color: #fff; box-shadow: 0 10px 30px -8px rgba(123,110,246,.8); }
+.btn-ghost { border: 1px solid rgba(255,255,255,.12); color: var(--showcase-ink); }
+
+.hero-phone-col { display: flex; justify-content: center; }
+.scroll-hint { position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%); font-size: 13px; color: var(--showcase-ink-muted); }
+
+.section-head { padding-top: 112px; padding-bottom: 16px; }
+.kicker { font-size: .875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .2em; color: var(--showcase-accent); }
+.section-head h2 { max-width: 42rem; margin-top: 12px; font-size: clamp(2rem, 4.5vw, 3.2rem); font-weight: 700; line-height: 1.2; }
+
+#feature-showcase {
+  position: relative;
+  display: flex; align-items: center;
+  min-height: 100vh;
+  padding-block: 40px;
+}
+.feature-grid { display: grid; gap: 40px; align-items: center; }
+
+.feature-block { display: flex; align-items: center; opacity: .35; }
+.feature-block .step { font-size: .875rem; font-weight: 700; letter-spacing: .2em; color: var(--showcase-accent); }
+.feature-block h3 { margin-top: 8px; font-size: clamp(1.4rem, 2.6vw, 2rem); font-weight: 700; line-height: 1.35; }
+.feature-block p { max-width: 28rem; margin-top: 12px; color: var(--showcase-ink-muted); }
+
+#phone-mockup-sticky { height: fit-content; display: flex; justify-content: center; }
+.phone-scale-wrap { transform-origin: top center; }
+
+/* All four screens share one grid cell so they cross-fade with no layout shift. */
+.phone-screen-stack { display: grid; height: 100%; }
+.phone-screen-view { grid-area: 1 / 1; }
+
+.stats { padding-block: 112px; }
+.stats-panel {
+  padding: 56px 32px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: var(--showcase-panel);
+  border-radius: 32px;
+}
+.stats-panel > h2 { max-width: 36rem; margin-bottom: 48px; font-size: clamp(1.6rem, 3.4vw, 2.4rem); font-weight: 700; line-height: 1.2; }
+.stat-grid { display: grid; gap: 40px; }
+.stat-value { font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 700; line-height: 1; letter-spacing: -.02em; color: var(--showcase-accent); }
+.stat-label { margin-top: 12px; font-weight: 600; }
+.stat-note { margin-top: 4px; font-size: .875rem; color: var(--showcase-ink-muted); }
+
+.reviews { padding-bottom: 112px; }
+.masonry { columns: 1; column-gap: 24px; }
+.review-card {
+  break-inside: avoid;
+  margin-bottom: 24px;
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: var(--showcase-panel);
+  border-radius: 24px;
+}
+.stars { font-size: .875rem; letter-spacing: .15em; color: #f2994a; }
+.stars .off { color: rgba(255,255,255,.15); }
+.review-card p { margin-top: 16px; }
+.review-by { display: flex; align-items: center; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.08); }
+.review-by .av { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(123,110,246,.15); font-size: 18px; }
+.review-by b { display: block; font-weight: 600; }
+.review-by span { display: block; font-size: .875rem; color: var(--showcase-ink-muted); }
+.disclaimer { margin-top: 40px; text-align: center; font-size: .75rem; color: var(--showcase-ink-muted); }
+
+.cta { position: relative; overflow: hidden; padding-top: 32px; padding-bottom: 128px; }
+.cta-glow {
+  position: absolute; left: 50%; top: 50%;
+  z-index: 0;
+  width: 820px; height: 820px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle,
+    rgba(123,110,246,.32) 0%,
+    rgba(123,110,246,.14) 38%,
+    rgba(123,110,246,.04) 58%,
+    transparent 74%);
+}
+.cta-inner { position: relative; z-index: 10; max-width: 48rem; margin-inline: auto; text-align: center; }
+.cta-inner h2 { font-size: clamp(2.2rem, 5.5vw, 3.6rem); font-weight: 700; line-height: 1.2; }
+.cta-inner > p { max-width: 36rem; margin: 24px auto 0; font-size: 1.125rem; color: var(--showcase-ink-muted); }
+.cta-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 40px; }
+.foot { margin-top: 64px; font-size: .875rem; color: var(--showcase-ink-muted); }
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+/* Below the pin breakpoint: no JS pin (that is what stutters on mobile
+   Safari) — the phone is CSS-sticky in an opaque band and feature text
+   scrolls out of sight underneath it. */
+@media (max-width: 768px) {
+  #phone-mockup-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    margin-inline: -24px;
+    padding: 2.5vh 24px 20px;
+    background: linear-gradient(to bottom,
+      var(--showcase-bg) 0%, var(--showcase-bg) 90%, transparent 100%);
+  }
+  .phone-scale-wrap { transform: scale(.6); }
+  .phone-scale-holder { height: 400px; }
+  .feature-block { min-height: 46vh; }
+  .feature-grid > .col-text { order: 2; }
+  .feature-grid > #phone-mockup-sticky { order: 1; }
+}
+
+/* At and above it: the whole section is pinned and #feature-list slides
+   inside a fixed-height window. Three blocks visible, neighbours dimmed. */
+@media (min-width: 769px) {
+  .hero-inner { grid-template-columns: 1fr 1fr; }
+  .hero-phone-col { justify-content: flex-end; }
+  .feature-grid { grid-template-columns: 1fr auto; gap: 80px; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .masonry { columns: 2; }
+  .stats-panel { padding-inline: 56px; }
+
+  #feature-window {
+    height: 72vh;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 80%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 80%, transparent 100%);
+  }
+  .feature-block { height: 24vh; }
+}
+
+@media (min-width: 1024px) {
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .masonry { columns: 3; }
+}
+
+/* Without JS (or if the GSAP CDN is blocked) everything must still read. */
+.no-js .feature-block { opacity: 1; }
+.no-js .phone-screen-view + .phone-screen-view { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+</style>
+</head>
+
+<body class="no-js">
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+
+  <div class="wrap hero-inner">
+    <div class="hero-text-col">
+      <span class="eyebrow"><i></i>รีวิวการใช้งานจริง · Petpet</span>
+
+      <h1 class="hero-title">
+        ให้อาหารน้อง<br />
+        <span class="accent">แม่นทุกกรัม</span><br />
+        แม้คุณไม่อยู่บ้าน
+      </h1>
+
+      <p class="hero-lead">
+        เครื่องให้อาหารอัจฉริยะที่ชั่งน้ำหนักอาหารในถาดแบบเรียลไทม์ ฆ่าเชื้อด้วย UV-C
+        และมี AI สัตวแพทย์คอยดูพฤติกรรมการกินของน้องให้ตลอด 24 ชั่วโมง
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary cta-button" href="#reviews">ดูรีวิวทั้งหมด</a>
+        <a class="btn btn-ghost cta-button" href="#feature-showcase">ฟีเจอร์ในแอป</a>
+      </div>
+    </div>
+
+    <div class="hero-phone-col hero-phone">
+      <!-- PHONE: hero (dashboard) -->
+      <div class="phone">
+        <span class="phone-btn l b1"></span><span class="phone-btn l b2"></span>
+        <span class="phone-btn l b3"></span><span class="phone-btn r b4"></span>
+        <div class="phone-bezel">
+          <div class="phone-well phone-light">
+            <div class="dynamic-island"><i></i></div>
+            <div data-screen="dashboard"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <span class="scroll-hint">เลื่อนลงเพื่อดูแอป ↓</span>
+</section>
+
+<!-- ===================== FEATURES ===================== -->
+<!-- Heading sits outside the pinned section: a pinned section has to fit in
+     one viewport, and this would push the phone off-screen. -->
+<section class="section-head reveal-section">
+  <div class="wrap">
+    <p class="kicker">ภายในแอป</p>
+    <h2>สี่หน้าจอ ที่คนเลี้ยงสัตว์ใช้จริงทุกวัน</h2>
+  </div>
+</section>
+
+<section id="feature-showcase">
+  <div class="wrap">
+    <div class="feature-grid">
+      <div class="col-text">
+        <div id="feature-window">
+          <div id="feature-list">
+            <article class="feature-block">
+              <div>
+                <span class="step">01</span>
+                <h3>รู้ทันทีว่าเหลืออาหารเท่าไหร่</h3>
+                <p>โหลดเซลล์ใต้ถาดชั่งน้ำหนักตลอดเวลา วงแหวนบนหน้าหลักบอกเป็นกรัมว่าน้องกินไปแล้วเท่าไหร่จากเป้าหมายวันนี้ ไม่ต้องเดาอีกต่อไป</p>
+              </div>
+            </article>
+            <article class="feature-block">
+              <div>
+                <span class="step">02</span>
+                <h3>ย้อนดูได้ทุกมื้อ 7 วัน</h3>
+                <p>กราฟแยกสีมื้อเช้า กลางวัน เย็น ให้เห็นทันทีว่าวันไหนน้องกินน้อยผิดปกติ และช่วงเวลาไหนที่น้องกินดีที่สุด</p>
+              </div>
+            </article>
+            <article class="feature-block">
+              <div>
+                <span class="step">03</span>
+                <h3>ถาม AI สัตวแพทย์ได้ทุกเมื่อ</h3>
+                <p>AI อ่านประวัติการกินจริงของน้องก่อนตอบทุกครั้ง ถามเป็นภาษาไทยได้เลยว่ากินน้อยลงแบบนี้ผิดปกติไหม ควรทำอะไรต่อ</p>
+              </div>
+            </article>
+            <article class="feature-block">
+              <div>
+                <span class="step">04</span>
+                <h3>ตั้งค่าเสร็จใน 30 วินาที</h3>
+                <p>กรอกชื่อ ชนิด วันเกิด และน้ำหนักของน้อง แค่นั้น Petpet คำนวณปริมาณอาหารที่เหมาะสมต่อวันให้อัตโนมัติ</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+
+      <div id="phone-mockup-sticky">
+        <!-- scale() does not shrink the layout box, so the holder is
+             height-capped to match below the pin breakpoint. -->
+        <div class="phone-scale-holder">
+          <div class="phone-scale-wrap">
+            <div class="phone">
+              <span class="phone-btn l b1"></span><span class="phone-btn l b2"></span>
+              <span class="phone-btn l b3"></span><span class="phone-btn r b4"></span>
+              <div class="phone-bezel">
+                <div class="phone-well phone-light">
+                  <div class="dynamic-island"><i></i></div>
+                  <div class="phone-screen-stack">
+                    <div class="phone-screen-view" data-screen="dashboard"></div>
+                    <div class="phone-screen-view" data-screen="history"></div>
+                    <div class="phone-screen-view" data-screen="vet"></div>
+                    <div class="phone-screen-view" data-screen="onboarding"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== STATS ===================== -->
+<section class="stats reveal-section">
+  <div class="wrap stats-panel">
+    <h2>ตัวเลขจากการใช้งานจริง</h2>
+    <div class="stat-grid">
+      <div>
+        <p class="stat-value" data-count-to="12480" data-count-decimals="0" data-count-suffix="">12,480</p>
+        <p class="stat-label">มื้อที่เทอัตโนมัติ</p>
+        <p class="stat-note">จากผู้ใช้ช่วงทดลอง</p>
+      </div>
+      <div>
+        <p class="stat-value" data-count-to="98.6" data-count-decimals="1" data-count-suffix="%">98.6%</p>
+        <p class="stat-label">ความแม่นยำการชั่ง</p>
+        <p class="stat-note">เทียบกับตาชั่งดิจิทัล</p>
+      </div>
+      <div>
+        <p class="stat-value" data-count-to="3.2" data-count-decimals="1" data-count-suffix=" วิ">3.2 วิ</p>
+        <p class="stat-label">เวลาเฉลี่ยต่อการเท</p>
+        <p class="stat-note">ตั้งแต่สั่งจนอาหารลงถาด</p>
+      </div>
+      <div>
+        <p class="stat-value" data-count-to="24" data-count-decimals="0" data-count-suffix="/7">24/7</p>
+        <p class="stat-label">UV-C ฆ่าเชื้อในถาด</p>
+        <p class="stat-note">ทำงานรอบอัตโนมัติ</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== REVIEWS ===================== -->
+<section class="reviews" id="reviews">
+  <div class="wrap">
+    <div class="section-head reveal-section" style="padding-top:0">
+      <p class="kicker">เสียงจากผู้ใช้</p>
+      <h2>คนเลี้ยงสัตว์เขาว่ายังไงกันบ้าง</h2>
+    </div>
+
+    <div class="masonry" id="review-grid"></div>
+
+    <p class="disclaimer">รีวิวข้างต้นเป็นตัวอย่างประกอบการออกแบบหน้าเว็บ ไม่ใช่คำรับรองจากผู้ใช้จริง</p>
+  </div>
+</section>
+
+<!-- ===================== CTA ===================== -->
+<section class="cta">
+  <div class="cta-glow" aria-hidden="true"></div>
+  <div class="cta-inner reveal-section">
+    <h2>ให้ Petpet ดูแลมื้ออาหารของน้อง</h2>
+    <p>เริ่มต้นด้วยการกรอกข้อมูลน้องแค่ 4 ช่อง แล้วปล่อยให้เครื่องกับ AI จัดการเรื่องอาหารและความสะอาดให้คุณ</p>
+    <div class="cta-actions">
+      <a class="btn btn-primary cta-button" href="/onboarding">เริ่มตั้งค่าน้อง</a>
+      <a class="btn btn-ghost cta-button" href="/dashboard">เข้าสู่แอป</a>
+    </div>
+    <p class="foot">Petpet · เครื่องให้อาหารสัตว์เลี้ยงอัจฉริยะ 🐾</p>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+/* If the CDN is unreachable — offline, or a network that blocks it — fall
+   back to the copies in vendor/. document.write is deliberate: it is the
+   one way to pull in a replacement script synchronously during parsing.
+   With neither available the page still renders fine, just unanimated. */
+if (!window.gsap) {
+  document.write('<scr' + 'ipt src="vendor/gsap.min.js"><\/scr' + 'ipt>');
+  document.write('<scr' + 'ipt src="vendor/ScrollTrigger.min.js"><\/scr' + 'ipt>');
+}
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================= screen markup ================= */
+
+  var STATUSBAR =
+    '<div class="statusbar"><span>9:41</span>' +
+    '<span class="sb-right"><span class="sb-bars"><i></i><i></i><i></i><i></i></span>' +
+    '<span class="sb-batt"><span></span></span></span></div>';
+
+  function navrail(active) {
+    var items = [["🏠", "หน้าหลัก"], ["📊", "ประวัติ"], ["💬", "AI สัตวแพทย์"], ["⚙️", "ตั้งค่า"]];
+    return '<nav class="navrail">' + items.map(function (it, i) {
+      return '<span class="' + (i === active ? "on" : "") + '"><em>' + it[0] + "</em>" + it[1] + "</span>";
+    }).join("") + "</nav>";
+  }
+
+  /* Dashboard — mirrors NeuProgressRing: muted track + accent arc, rotated. */
+  var RING_SIZE = 158, RING_STROKE = 14;
+  var R = (RING_SIZE - RING_STROKE) / 2;
+  var C = 2 * Math.PI * R;
+  var PCT = 320 / 450;
+
+  var SCREENS = {
+    dashboard:
+      '<div class="screen">' + STATUSBAR +
+      '<header class="dash-head">' +
+        '<div class="dash-pet"><span class="neu-raised-round dash-avatar">🐾</span><span class="dash-name">มะลิ</span></div>' +
+        '<span class="neu-raised-sm uv-pill"><span class="uv-dot"></span><b>UV กำลังฆ่าเชื้อ</b></span>' +
+      "</header>" +
+      '<div class="screen-body">' +
+        '<div class="neu-raised-sm alert"><div><p>น้องกินน้อยกว่าปกติในมื้อนี้</p><a href="#">ถาม AI สัตวแพทย์</a></div><span class="x">✕</span></div>' +
+        '<div class="neu-raised tray-card"><h2>อาหารในถาดตอนนี้</h2>' +
+          '<div class="ring"><svg width="' + RING_SIZE + '" height="' + RING_SIZE + '">' +
+            '<circle cx="' + RING_SIZE / 2 + '" cy="' + RING_SIZE / 2 + '" r="' + R + '" fill="none" stroke="var(--neu-dark)" stroke-opacity=".5" stroke-width="' + RING_STROKE + '"/>' +
+            '<circle cx="' + RING_SIZE / 2 + '" cy="' + RING_SIZE / 2 + '" r="' + R + '" fill="none" stroke="var(--neu-accent)" stroke-width="' + RING_STROKE + '" stroke-linecap="round" stroke-dasharray="' + C + '" stroke-dashoffset="' + C * (1 - PCT) + '"/>' +
+          "</svg>" +
+          '<div class="ring-label"><b>320g</b><span>/450g</span></div></div>' +
+        "</div>" +
+        /* The app uses a 🍽️ emoji here; drawn as SVG because emoji coverage
+           varies by platform and this is the control the screen points at. */
+        '<div class="fab-row"><span class="neu-raised-round fab">' +
+          '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+          '<path d="M3.5 11h17a8.5 8.5 0 0 1-17 0Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>' +
+          '<path d="M9 6.2c0-1 .8-1.7 1.5-2.2M13 6.2c0-1 .8-1.7 1.5-2.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>' +
+          '<path d="M2 20.5h20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>' +
+        "</span></div>" +
+      "</div>" + navrail(0) + "</div>",
+
+    history: (function () {
+      /* Same series colours and Thai labels as the app's WeeklyFeedChart. */
+      var series = [
+        ["เช้า", "var(--neu-accent)"],
+        ["กลางวัน", "var(--neu-warning)"],
+        ["เย็น", "var(--neu-ink-muted)"]
+      ];
+      var data = [
+        ["จ", [140, 120, 150]], ["อ", [150, 135, 145]], ["พ", [130, 110, 140]],
+        ["พฤ", [145, 130, 150]], ["ศ", [150, 140, 148]], ["ส", [120, 95, 130]],
+        ["อา", [135, 125, 142]]
+      ];
+      var MAX = 160;
+
+      var bars = data.map(function (d) {
+        return '<div class="day">' + d[1].map(function (v, i) {
+          return '<i style="height:' + (v / MAX * 100) + "%;background:" + series[i][1] + '"></i>';
+        }).join("") + "</div>";
+      }).join("");
+
+      var days = data.map(function (d) { return "<span>" + d[0] + "</span>"; }).join("");
+      var legend = series.map(function (s) {
+        return '<span><i style="background:' + s[1] + '"></i>' + s[0] + "</span>";
+      }).join("");
+
+      return '<div class="screen">' + STATUSBAR +
+        '<header class="hist-head"><h1>ประวัติการกิน</h1></header>' +
+        '<div class="screen-body">' +
+          '<div class="neu-raised chart-card"><h2>ปริมาณอาหารที่กินย้อนหลัง 7 วัน</h2>' +
+            '<div class="chart-row">' +
+              '<div class="y-axis"><span>160</span><span>120</span><span>80</span><span>40</span><span>0</span></div>' +
+              '<div class="bars">' + bars + "</div>" +
+            "</div>" +
+            '<div class="x-axis"><span class="pad"></span><div class="days">' + days + "</div></div>" +
+            '<div class="legend">' + legend + "</div>" +
+          "</div>" +
+          '<div class="hist-stats">' +
+            '<div class="neu-raised-sm hist-stat"><span>เฉลี่ยต่อวัน</span><b>402g</b></div>' +
+            '<div class="neu-raised-sm hist-stat"><span>มื้อที่เทสัปดาห์นี้</span><b>21 มื้อ</b></div>' +
+            '<div class="neu-raised-sm hist-stat"><span>วันที่กินน้อยที่สุด</span><b class="warn">เสาร์ · 345g</b></div>' +
+          "</div>" +
+        "</div>" + navrail(1) + "</div>";
+    })(),
+
+    vet: (function () {
+      var msgs = [
+        ["bot", "สวัสดีค่ะ 🐾 วันนี้มะลิกินไป 320g จาก 450g ที่ตั้งไว้ มีอะไรให้ช่วยดูไหมคะ"],
+        ["me", "มะลิกินน้อยลงสองวันแล้ว ปกติไหมคะ"],
+        ["bot", "จากประวัติ 7 วัน มะลิกินลดลงราว 12% ค่ะ ถ้ายังร่าเริงและขับถ่ายปกติ มักไม่น่ากังวล อาจเป็นเพราะอากาศร้อน ลองสังเกตต่ออีก 1–2 วันนะคะ"],
+        ["me", "ถ้ายังกินน้อยอยู่ควรทำยังไงดี"],
+        ["bot", "ลองแบ่งเป็นมื้อเล็ก 4 มื้อแทน 3 มื้อดูก่อนนะคะ แล้วเช็กว่าอาหารไม่ชื้น ถ้าเกิน 3 วันแล้วยังกินน้อยกว่า 70% ของเป้าหมาย แนะนำให้พาไปพบสัตวแพทย์ค่ะ"]
+      ];
+      var chat = msgs.map(function (m) {
+        return '<div class="msg ' + (m[0] === "me" ? "me" : "") + '"><p class="neu-raised-sm">' + m[1] + "</p></div>";
+      }).join("");
+
+      return '<div class="screen">' + STATUSBAR +
+        '<header class="vet-head"><span class="neu-raised-round vet-avatar">💬</span>' +
+          "<div><h1>AI สัตวแพทย์</h1><p>รู้จักพฤติกรรมการกินของมะลิ</p></div></header>" +
+        '<div class="chat">' + chat + "</div>" +
+        '<div class="chat-input"><span class="neu-inset field">พิมพ์คำถามเกี่ยวกับน้อง...</span>' +
+          '<span class="neu-raised-round send">➤</span></div>' +
+        navrail(2) + "</div>";
+    })(),
+
+    onboarding: (function () {
+      /* Field labels match the app's onboarding form exactly. */
+      var fields = [
+        ["ชื่อสัตว์เลี้ยง", "มะลิ", false],
+        ["ชนิดสัตว์เลี้ยง", "แมว", true],
+        ["วันเดือนปีเกิด", "12 / 03 / 2565", false],
+        ["น้ำหนัก (กก.)", "4.2", false]
+      ];
+      var rows = fields.map(function (f) {
+        return '<label class="ob-field"><span>' + f[0] + "</span>" +
+          '<span class="neu-inset val">' + f[1] + (f[2] ? "<span>▾</span>" : "") + "</span></label>";
+      }).join("");
+
+      return '<div class="screen">' + STATUSBAR +
+        '<div class="ob"><div class="neu-raised ob-card">' +
+          "<h1>Petpet 🐾</h1><p>กรอกข้อมูลน้องสัตว์เลี้ยงของคุณ</p>" +
+          rows +
+          '<span class="neu-raised-sm ob-submit">เริ่มต้นใช้งาน</span>' +
+        "</div></div></div>";
+    })()
+  };
+
+  document.querySelectorAll("[data-screen]").forEach(function (el) {
+    el.innerHTML = SCREENS[el.dataset.screen];
+  });
+
+  /* ================= reviews ================= */
+
+  var REVIEWS = [
+    ["ณิชา", "เจ้าโมจิ · แมวสก็อตติช", 5, "ทำงานกะดึกแล้วไม่ต้องกังวลเลยค่ะ เปิดแอปดูวงแหวนก็รู้ว่าโมจิกินไปกี่กรัมแล้ว จากเดิมที่ได้แค่เดาว่าชามหมดหรือยัง"],
+    ["กฤต", "เจ้าบุญมี · โกลเด้น", 5, "ชอบกราฟ 7 วันมาก เห็นเลยว่าบุญมีกินน้อยลงตั้งแต่วันพุธ พาไปหาหมอทัน ปรากฏว่าฟันมีปัญหาจริง ๆ ถ้าไม่มีกราฟนี้คงไม่ทันสังเกต"],
+    ["พิมพ์ชนก", "เจ้าถั่วเขียว · แมวไทย", 4, "ถาม AI สัตวแพทย์ตอนตีสองได้ ตอบไทยชัดเจนและอ้างอิงประวัติการกินของถั่วเขียวจริง ๆ ไม่ใช่ตอบกว้าง ๆ แบบที่เคยเจอ"],
+    ["อนุชา", "เจ้าข้าวปั้น · ชิบะ", 5, "ตั้งค่าครั้งแรกใช้เวลาไม่ถึงนาที กรอกแค่ชื่อ วันเกิด น้ำหนัก แล้วมันคำนวณปริมาณต่อวันให้เอง ไม่ต้องนั่งหาข้อมูลเอง"],
+    ["สุธาสินี", "เจ้ามินิ · ปอมเมอเรเนียน", 5, "หลอด UV ทำงานทุกรอบหลังกินเสร็จ ถาดไม่มีกลิ่นติดเหมือนเครื่องเก่าเลย ล้างง่ายขึ้นเยอะค่ะ"],
+    ["ธีรภัทร", "เจ้าโอปอล์ · แมวเปอร์เซีย", 4, "แจ้งเตือนตอนกินน้อยกว่าปกติแม่นดี กดจากการแจ้งเตือนไปถาม AI ต่อได้เลยในหน้าเดียว ไม่ต้องเล่าประวัติซ้ำ"]
+  ];
+
+  document.getElementById("review-grid").innerHTML = REVIEWS.map(function (r) {
+    return '<article class="review-card reveal-section">' +
+      '<span class="stars" aria-label="' + r[2] + ' จาก 5 ดาว">' +
+        "★".repeat(r[2]) + '<span class="off">' + "★".repeat(5 - r[2]) + "</span></span>" +
+      "<p>" + r[3] + "</p>" +
+      '<div class="review-by"><span class="av">🐾</span><span><b>' + r[0] + "</b><span>" + r[1] + "</span></span></div>" +
+    "</article>";
+  }).join("");
+
+  /* ================= animation ================= */
+
+  document.body.classList.remove("no-js");
+
+  if (!window.gsap || !window.ScrollTrigger) {
+    // CDN blocked / offline: leave the page in its readable static state.
+    document.body.classList.add("no-js");
+    return;
+  }
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  var screens = gsap.utils.toArray(".phone-screen-view");
+  var blocks = gsap.utils.toArray(".feature-block");
+
+  gsap.set(screens.slice(1), { opacity: 0 });
+  gsap.set(blocks[0], { opacity: 1 });
+
+  // Offset that centres a feature block in the window. Read through a function
+  // so invalidateOnRefresh re-measures after resize or a late font load.
+  function centreOffset(win, block) {
+    return -(block.offsetTop - (win.clientHeight - block.offsetHeight) / 2);
+  }
+
+  var mm = gsap.matchMedia();
+
+  /* ---- Desktop: pin the section, scrub everything off one timeline ---- */
+  mm.add(
+    { isDesktop: "(min-width: 769px)", reduce: "(prefers-reduced-motion: reduce)" },
+    function (ctx) {
+      if (!ctx.conditions.isDesktop || ctx.conditions.reduce) return;
+
+      var win = document.getElementById("feature-window");
+      var list = document.getElementById("feature-list");
+
+      gsap.set(list, { y: function () { return centreOffset(win, blocks[0]); } });
+
+      var tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: "#feature-showcase",
+          start: "top top",
+          end: "+=3000",
+          scrub: 1,
+          pin: true,
+          anticipatePin: 1,
+          invalidateOnRefresh: true
+        }
+      });
+
+      // Screen swap, text highlight and list travel share a timeline position,
+      // so the phone and the highlighted copy cannot drift apart.
+      screens.forEach(function (screen, i) {
+        if (i === 0) return;
+        tl.to(screens[i - 1], { opacity: 0, x: -30, duration: .5, ease: "power2.inOut" }, i)
+          .fromTo(screen, { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5, ease: "power2.inOut" }, i)
+          .to(blocks[i - 1], { opacity: .35, duration: .4, ease: "power2.inOut" }, i)
+          .to(blocks[i], { opacity: 1, duration: .4, ease: "power2.inOut" }, i)
+          .to(list, {
+            y: function () { return centreOffset(win, blocks[i]); },
+            duration: .5, ease: "power2.inOut"
+          }, i);
+      });
+
+      // Hero parallax — glow (farthest) travels most, phone (nearest) least.
+      var heroScrub = { trigger: ".hero", start: "top top", end: "bottom top", scrub: .5 };
+      gsap.to(".hero-glow", { y: 150, scrollTrigger: heroScrub });
+      gsap.to(".hero-phone", { y: 80, scale: .92, scrollTrigger: heroScrub });
+      gsap.to(".hero-text-col", { y: 40, opacity: .3, scrollTrigger: heroScrub });
+
+      gsap.to(".hero-phone", { y: "+=16", duration: 3, yoyo: true, repeat: -1, ease: "sine.inOut" });
+    }
+  );
+
+  /* ---- Small screens / reduced motion: no pin, discrete swaps ---- */
+  mm.add(
+    { isMobile: "(max-width: 768px)", reduce: "(prefers-reduced-motion: reduce)" },
+    function (ctx) {
+      var reduce = ctx.conditions.reduce;
+      if (!ctx.conditions.isMobile && !reduce) return;
+
+      blocks.forEach(function (block, i) {
+        ScrollTrigger.create({
+          trigger: block,
+          // Blocks are contiguous, so gating on one line means exactly one is
+          // ever active. 65% sits below the sticky phone band.
+          start: "top 65%",
+          end: "bottom 65%",
+          onToggle: function (self) {
+            if (!self.isActive) return;
+            var d = reduce ? 0 : .4;
+            screens.forEach(function (s, j) {
+              gsap.to(s, { opacity: j === i ? 1 : 0, duration: d, ease: "power2.inOut" });
+            });
+            blocks.forEach(function (b, j) {
+              gsap.to(b, { opacity: j === i ? 1 : .35, duration: d, ease: "power2.inOut" });
+            });
+          }
+        });
+      });
+    }
+  );
+
+  /* ---- Reveals, counters, hovers ---- */
+  mm.add("(prefers-reduced-motion: no-preference)", function () {
+    var teardown = [];
+
+    gsap.utils.toArray(".reveal-section").forEach(function (el) {
+      gsap.fromTo(el,
+        { opacity: 0, y: 40 },
+        {
+          opacity: 1, y: 0, duration: .9, ease: "power3.out",
+          scrollTrigger: { trigger: el, start: "top 82%", toggleActions: "play none none reverse" }
+        });
+    });
+
+    gsap.utils.toArray(".stat-value").forEach(function (el) {
+      var target = Number(el.dataset.countTo || 0);
+      var decimals = Number(el.dataset.countDecimals || 0);
+      var suffix = el.dataset.countSuffix || "";
+      var counter = { value: 0 };
+
+      gsap.to(counter, {
+        value: target, duration: 1.8, ease: "power3.out",
+        scrollTrigger: { trigger: el, start: "top 85%", toggleActions: "play none none none" },
+        onUpdate: function () {
+          el.textContent = counter.value.toLocaleString("th-TH", {
+            minimumFractionDigits: decimals, maximumFractionDigits: decimals
+          }) + suffix;
+        }
+      });
+    });
+
+    gsap.utils.toArray(".review-card, .cta-button").forEach(function (card) {
+      function enter() { gsap.to(card, { y: -8, scale: 1.02, duration: .4, ease: "back.out(1.4)" }); }
+      function leave() { gsap.to(card, { y: 0, scale: 1, duration: .4, ease: "power2.out" }); }
+      card.addEventListener("mouseenter", enter);
+      card.addEventListener("mouseleave", leave);
+      // matchMedia reverts tweens, not listeners — remove them by hand.
+      teardown.push(function () {
+        card.removeEventListener("mouseenter", enter);
+        card.removeEventListener("mouseleave", leave);
+      });
+    });
+
+    return function () { teardown.forEach(function (fn) { fn(); }); };
+  });
+
+  // Prompt/Sarabun load async and change section heights, which would leave
+  // the pin measured against the fallback font.
+  if (document.fonts) document.fonts.ready.then(function () { ScrollTrigger.refresh(); });
+})();
+</script>
+</body>
+</html>
