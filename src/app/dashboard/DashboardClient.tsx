@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isEatingLow, rollingAverageForSlot } from "@/lib/feeding-logic";
 import {
@@ -46,6 +47,7 @@ export function DashboardClient({
   initialStatus,
   recentEvents,
 }: DashboardClientProps) {
+  const router = useRouter();
   const [reading, setReading] = useState(initialReading);
   const [status, setStatus] = useState(initialStatus);
   const [alertDismissed, setAlertDismissed] = useState(false);
@@ -184,13 +186,16 @@ export function DashboardClient({
 
     // Awaiting this is what keeps ManualFeedButton's spinner going: it owns
     // its own loading state and clears it when this promise settles.
-    const message = await new Promise<string>((resolve) => {
+    const { message, succeeded } = await new Promise<{
+      message: string;
+      succeeded: boolean;
+    }>((resolve) => {
       let timer: ReturnType<typeof setTimeout>;
 
-      const settle = (m: string) => {
+      const settle = (m: string, ok = false) => {
         clearTimeout(timer);
         pendingFeedRef.current = null;
-        resolve(m);
+        resolve({ message: m, succeeded: ok });
       };
 
       // Two deadlines, because they mean different things: a feeder polling at
@@ -210,7 +215,7 @@ export function DashboardClient({
           .maybeSingle();
 
         if (row && isTerminalStatus(row.status)) {
-          settle(feedResultMessage(row));
+          settle(feedResultMessage(row), row.status === "success");
           return;
         }
 
@@ -232,13 +237,20 @@ export function DashboardClient({
             timer = setTimeout(() => void giveUp("execute"), RUNNING_TIMEOUT_MS);
             return;
           }
-          if (isTerminalStatus(row.status)) settle(feedResultMessage(row));
+          if (isTerminalStatus(row.status)) {
+            settle(feedResultMessage(row), row.status === "success");
+          }
         },
       };
     });
 
     showToast(message, true);
-  }, [pet.device_id, showToast]);
+
+    // recentEvents is a server snapshot taken at page render, so without this
+    // a completed feed leaves the low-eating alert and /history showing
+    // pre-feed data until a manual reload.
+    if (succeeded) router.refresh();
+  }, [pet.device_id, router, showToast]);
 
   return (
     <div className="min-h-screen pb-28 md:pb-8 md:pl-24">

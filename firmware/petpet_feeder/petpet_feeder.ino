@@ -294,6 +294,25 @@ static void reportReading() {
 // --------------------------------------------------------------------------
 // WiFi
 // --------------------------------------------------------------------------
+// True while the gate is, or is about to be, physically open.
+static bool dispensing() {
+  return state == ST_DISPENSE_OPEN
+      || state == ST_DISPENSE_WAIT
+      || state == ST_DISPENSE_CLOSE;
+}
+
+// Fail-safe close. The gate must never be left open by any path that leaves
+// the dispense states early: the servo holds SERVO_OPEN_ANGLE for as long as
+// it is attached, so a WiFi drop mid-dispense would otherwise keep pouring
+// for the whole reconnect window (up to the 5-minute restart) and empty the
+// hopper into the bowl. Safe to call from any state.
+static void closeGate() {
+  feedServo.attach(SERVO_PIN);
+  feedServo.write(SERVO_CLOSED_ANGLE);
+  delay(300);
+  feedServo.detach();
+}
+
 static void startWifi() {
   WiFi.mode(WIFI_STA);
   // Don't rewrite flash on every boot.
@@ -361,7 +380,14 @@ static void netInit() {
 
   nextPollAt = millis();
   nextReadingAt = millis();
-  state = ST_IDLE;
+
+  // Resume an unreported result instead of dropping it. If the network died
+  // between the gate closing and the POST landing, going straight to ST_IDLE
+  // lost the meal: the row expired as timeout_execute even though the food
+  // was delivered. device_report_result() accepts a late success report.
+  state = (cmdId[0] != '\0') ? ST_REPORT : ST_IDLE;
+  nextReportAt = millis();
+  reportAttempts = 0;
 }
 
 void loop() {
@@ -369,6 +395,17 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     if (state != ST_WIFI_CONNECT) {
       Serial.println(F("[wifi] lost"));
+
+      // Losing WiFi must not leave food pouring. The command stays 'running'
+      // server-side and expire_stale_commands() fails it as timeout_execute
+      // after 120s, so the user is told it failed rather than being shown a
+      // success for a meal that was cut short.
+      if (dispensing()) {
+        Serial.println(F("[servo] emergency close: wifi lost mid-dispense"));
+        closeGate();
+        cmdId[0] = '\0';
+      }
+
       // Force a fresh socket; session resumption makes reconnecting cheap.
       tlsClient.stop();
       wifiDownSince = millis();
@@ -389,6 +426,10 @@ void loop() {
     // `running` and the server's expire_stale_commands() fails it after 120s.
     if (wifiDownSince != 0 && due(wifiDownSince + 300000UL)) {
       Serial.println(F("[wifi] down 5 min, restarting"));
+      // Belt-and-braces: the gate is already closed by the branch above, but a
+      // reset drops the servo signal entirely, so make the mechanical state
+      // explicit before losing control of the pin.
+      closeGate();
       ESP.restart();
     }
 
@@ -507,7 +548,24 @@ void loop() {
     }
 
     case ST_REPORT: {
-      if (due(nextReportAt)) reportResult(true, nullptr);
+      if (!due(nextReportAt)) break;
+
+#if HAS_LOAD_CELL
+      // The load cell is the only thing that can tell "the gate opened" from
+      // "food actually came out". If a full dispense added almost nothing to
+      // the tray, the hopper is empty or the chute is jammed — reporting
+      // success there would hide a real fault and let the low-eating alert
+      // blame the pet for not eating food it never received.
+      if (haveWeights && cmdTargetG > 0.0f &&
+          (trayAfterG - trayBeforeG) < (cmdTargetG * 0.25f)) {
+        Serial.printf("[servo] dispensed %.1fg of %.1fg target - reporting empty_tank\n",
+                      trayAfterG - trayBeforeG, cmdTargetG);
+        reportResult(false, "empty_tank");
+        break;
+      }
+#endif
+
+      reportResult(true, nullptr);
       break;
     }
 

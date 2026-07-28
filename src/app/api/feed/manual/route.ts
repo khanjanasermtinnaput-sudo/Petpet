@@ -38,6 +38,20 @@ export async function POST() {
   });
 
   if (error) {
+    // enqueue_feed_command raises SQLSTATE 54000 when a device has been asked
+    // to feed too often. That is a caller problem, not a server fault, so it
+    // gets its own status and a message the user can act on.
+    if (error.code === "54000") {
+      return NextResponse.json(
+        { error: "สั่งให้อาหารถี่เกินไป กรุณารอสักครู่แล้วลองใหม่" },
+        { status: 429 },
+      );
+    }
+    console.error("[feed/manual] enqueue failed", {
+      device_id: pet.device_id,
+      code: error.code,
+      message: error.message,
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

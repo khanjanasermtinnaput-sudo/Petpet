@@ -43,14 +43,28 @@ functions against the `devices` table, which is deny-all to `anon`.
 | Forge meal history | Yes — `anon` has no INSERT on `feed_events` |
 | Steal/complete another feeder's command | Yes — `device_id` is in the update predicate |
 | Report readings as another device | Yes — needs that device's secret |
-| **Trigger a feed on your feeder** | **No** |
+| Replay a result report | Yes — idempotent against the `running` state |
+| Queue two feeds at once | Yes — partial unique index on `(device_id)` |
+| Feed in a loop to overfeed the animal | Bounded — 10 commands/device/hour |
+| **Trigger a single feed on your feeder** | **No** |
 
 That last row is deliberate and worth stating plainly: `enqueue_feed_command`
 takes no secret, because the web app runs on the public anon key and a secret
 there would just be published to every browser. Anyone who can guess a
-`device_id` can queue a feed. Closing it means putting enqueue behind the
-service-role key — but `/api/feed/manual` is itself unauthenticated, so that
-only moves the boundary to somewhere you can rate-limit. Not done yet.
+`device_id` can queue a feed.
+
+**Rate limiting bounds the damage but is not authentication.** Ten commands per
+device per hour (`0007`) leaves room for three scheduled meals plus retries,
+and turns "empty the hopper into the bowl" into "one unwanted meal". Exceeding
+it raises SQLSTATE `54000`, which `/api/feed/manual` surfaces as HTTP 429 with
+a Thai message rather than a generic 500.
+
+Genuinely closing this needs user accounts. Supabase Auth was removed on
+purpose in migration 0002 (no login, no sessions, no `@supabase/ssr`), so
+"authenticated users only" is not a tweak to this design — it is a different
+design, and `/api/feed/manual` is itself unauthenticated, so moving enqueue
+behind the service-role key would only relocate the boundary. Left as a known
+limitation rather than half-built.
 
 ---
 
@@ -461,6 +475,10 @@ value and set `SCALE_TARE_RAW`. Put a known weight on, then
 | Random reboots mid-dispense | servo browning out the board | separate 5 V supply + bulk capacitor |
 | Heap drifting down to ~20 KB | fragmentation | the firmware skips a cycle below 20 KB; check for a modified request path building `String`s |
 | Command stuck `running` forever | device rebooted mid-feed | resolves itself — `expire_stale_commands()` fails it after 120s |
+| HTTP 429 from Feed Now | more than 10 commands for this device in the last hour | wait, or raise the threshold in `enqueue_feed_command` |
+| Command `success` with `error = recovered_late_report` | the food was dispensed but the report arrived after the 120s timeout had already failed the row | nothing to fix — the meal was recovered rather than lost. Frequent occurrences mean a flaky link |
+| Feed reported `empty_tank` with a load cell fitted | a full dispense added <25% of target to the tray | refill the hopper, or check the chute for a jam |
+| Gate opened and food kept pouring | fixed in `0007`-era firmware — WiFi loss mid-dispense used to leave the servo attached at `SERVO_OPEN_ANGLE` | reflash; `closeGate()` now runs on any abnormal exit from the dispense states |
 | `actual_eaten_g` always 0 | no load cell, or the device rebooted during the 30-minute settle window | `HAS_LOAD_CELL 1`; a lost settle report is not recoverable |
 | History bars all zero | same as above | consumption tracking requires a load cell |
 
