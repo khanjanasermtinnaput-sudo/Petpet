@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# firmware secrets (config.example.h is intentionally tracked as a template)
+firmware/**/config.h
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
