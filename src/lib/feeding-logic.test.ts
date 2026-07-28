@@ -2,9 +2,36 @@ import { describe, expect, it } from "vitest";
 import {
   computeDispenseAmount,
   isEatingLow,
+  mealSlotForDate,
   rollingAverageForSlot,
   type FeedEventSlice,
 } from "./feeding-logic";
+
+// Every instant here is written in UTC on purpose: the whole point of
+// mealSlotForDate is that it does not care what the host clock is set to, and
+// these assertions would have failed against the getHours() version it
+// replaced. Bangkok is UTC+7 year-round (no DST).
+describe("mealSlotForDate", () => {
+  it("buckets by Bangkok local time, not UTC", () => {
+    // 12:00 Bangkok. The old getHours() implementation saw 05:00 UTC on
+    // Vercel and called this breakfast.
+    expect(mealSlotForDate(new Date("2026-07-20T05:00:00Z"))).toBe("lunch");
+    // 18:00 Bangkok, previously mis-bucketed as lunch (11:00 UTC).
+    expect(mealSlotForDate(new Date("2026-07-20T11:00:00Z"))).toBe("dinner");
+  });
+
+  it("puts the boundaries at 11:00 and 17:00 local", () => {
+    expect(mealSlotForDate(new Date("2026-07-20T03:59:00Z"))).toBe("breakfast"); // 10:59
+    expect(mealSlotForDate(new Date("2026-07-20T04:00:00Z"))).toBe("lunch"); // 11:00
+    expect(mealSlotForDate(new Date("2026-07-20T09:59:00Z"))).toBe("lunch"); // 16:59
+    expect(mealSlotForDate(new Date("2026-07-20T10:00:00Z"))).toBe("dinner"); // 17:00
+  });
+
+  it("treats Bangkok midnight as breakfast rather than hour 24", () => {
+    expect(mealSlotForDate(new Date("2026-07-20T17:00:00Z"))).toBe("breakfast"); // 00:00
+    expect(mealSlotForDate(new Date("2026-07-20T16:59:00Z"))).toBe("dinner"); // 23:59
+  });
+});
 
 describe("computeDispenseAmount", () => {
   it("dispenses the shortfall between target and current tray weight", () => {

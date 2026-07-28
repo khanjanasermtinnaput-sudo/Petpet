@@ -6,6 +6,31 @@ export interface FeedEventSlice {
   ts: string;
 }
 
+const BANGKOK_HOUR = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Bangkok",
+  hour: "2-digit",
+  // hourCycle over hour12:false — the latter renders midnight as "24" on some
+  // ICU builds, which would bucket 00:xx as dinner.
+  hourCycle: "h23",
+});
+
+/**
+ * Meal slot for a moment in time, in the pet's local timezone.
+ *
+ * Pinned to Asia/Bangkok rather than the host clock: Vercel functions run with
+ * TZ=UTC no matter which region they're pinned to (`regions` in vercel.json
+ * controls latency, not the clock), so the `new Date().getHours()` this
+ * replaces put Bangkok lunch and dinner in the wrong buckets — 12:00 local
+ * read as breakfast and 18:00 as lunch. Postgres now() is UTC under PostgREST
+ * too, so moving the boundaries into SQL would not have fixed it either.
+ */
+export function mealSlotForDate(date: Date): MealSlot {
+  const hour = Number(BANGKOK_HOUR.format(date));
+  if (hour < 11) return "breakfast";
+  if (hour < 17) return "lunch";
+  return "dinner";
+}
+
 /**
  * Amount to dispense so the tray reaches `targetG`, given what's already there.
  * Never negative — an overfull tray dispenses nothing.

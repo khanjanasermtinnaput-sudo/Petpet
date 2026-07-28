@@ -15,18 +15,51 @@ export type Database = {
       device_status: {
         Row: {
           device_id: string;
+          firmware_version: string | null;
+          last_feed_at: string | null;
+          last_seen_at: string | null;
           updated_at: string;
           uv_status: boolean;
+          wifi_rssi: number | null;
         };
         Insert: {
           device_id: string;
+          firmware_version?: string | null;
+          last_feed_at?: string | null;
+          last_seen_at?: string | null;
           updated_at?: string;
           uv_status?: boolean;
+          wifi_rssi?: number | null;
         };
         Update: {
           device_id?: string;
+          firmware_version?: string | null;
+          last_feed_at?: string | null;
+          last_seen_at?: string | null;
           updated_at?: string;
           uv_status?: boolean;
+          wifi_rssi?: number | null;
+        };
+        Relationships: [];
+      };
+      devices: {
+        Row: {
+          created_at: string;
+          device_id: string;
+          label: string;
+          secret_hash: string;
+        };
+        Insert: {
+          created_at?: string;
+          device_id: string;
+          label?: string;
+          secret_hash: string;
+        };
+        Update: {
+          created_at?: string;
+          device_id?: string;
+          label?: string;
+          secret_hash?: string;
         };
         Relationships: [];
       };
@@ -54,6 +87,69 @@ export type Database = {
           meal_slot?: string;
           target_g?: number;
           ts?: string;
+        };
+        Relationships: [];
+      };
+      feeder_commands: {
+        Row: {
+          attempts: number;
+          command: string;
+          created_at: string;
+          device_id: string;
+          dispensed_g: number | null;
+          error: string | null;
+          executed_at: string | null;
+          feed_event_id: string | null;
+          finished_at: string | null;
+          id: string;
+          meal_slot: string;
+          retry_of: string | null;
+          source: string;
+          status: string;
+          target_g: number;
+          tray_after_g: number | null;
+          tray_before_g: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          attempts?: number;
+          command?: string;
+          created_at?: string;
+          device_id: string;
+          dispensed_g?: number | null;
+          error?: string | null;
+          executed_at?: string | null;
+          feed_event_id?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          meal_slot: string;
+          retry_of?: string | null;
+          source?: string;
+          status?: string;
+          target_g: number;
+          tray_after_g?: number | null;
+          tray_before_g?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          attempts?: number;
+          command?: string;
+          created_at?: string;
+          device_id?: string;
+          dispensed_g?: number | null;
+          error?: string | null;
+          executed_at?: string | null;
+          feed_event_id?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          meal_slot?: string;
+          retry_of?: string | null;
+          source?: string;
+          status?: string;
+          target_g?: number;
+          tray_after_g?: number | null;
+          tray_before_g?: number | null;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -155,7 +251,60 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      device_health: {
+        Args: { p_device_id: string };
+        Returns: Json;
+      };
+      device_poll_command: {
+        Args: { p_device_id: string; p_secret: string };
+        Returns: Json;
+      };
+      device_report_consumption: {
+        Args: {
+          p_command_id: string;
+          p_device_id: string;
+          p_secret: string;
+          p_tray_weight_g: number;
+        };
+        Returns: Json;
+      };
+      device_report_reading: {
+        Args: {
+          p_device_id: string;
+          p_firmware_version?: string;
+          p_secret: string;
+          p_tank_weight_g: number;
+          p_tray_weight_g: number;
+          p_uv_status?: boolean;
+          p_wifi_rssi?: number;
+        };
+        Returns: Json;
+      };
+      device_report_result: {
+        Args: {
+          p_command_id: string;
+          p_device_id: string;
+          p_dispensed_g?: number;
+          p_error?: string;
+          p_secret: string;
+          p_success: boolean;
+          p_tray_weight_g?: number;
+        };
+        Returns: Json;
+      };
+      enqueue_feed_command: {
+        Args: {
+          p_device_id: string;
+          p_meal_slot: string;
+          p_retry_of?: string;
+          p_source?: string;
+          p_target_g: number;
+        };
+        // `returns public.feeder_commands` — a single row, which is why this
+        // one is spelled out rather than left as Json: it's the only RPC the
+        // app itself calls, so `command.id` and `command.status` type-check.
+        Returns: Database["public"]["Tables"]["feeder_commands"]["Row"];
+      };
     };
     Enums: {
       [_ in never]: never;
