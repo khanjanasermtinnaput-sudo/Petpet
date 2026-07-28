@@ -1,9 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isEatingLow, rollingAverageForSlot } from "@/lib/feeding-logic";
-import type { DeviceStatus, FeedEvent, FeederReading, Pet } from "@/lib/types";
+import {
+  feedResultMessage,
+  feedTimeoutMessage,
+  isTerminalStatus,
+  PENDING_TIMEOUT_MS,
+  RUNNING_TIMEOUT_MS,
+  TOAST_HIDE_MS,
+} from "@/lib/feeder-commands";
+import type {
+  DeviceStatus,
+  FeedEvent,
+  FeederCommand,
+  FeederReading,
+  Pet,
+} from "@/lib/types";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { TrayHeroCard } from "@/components/dashboard/TrayHeroCard";
 import { LowEatingAlert } from "@/components/dashboard/LowEatingAlert";
@@ -16,7 +30,7 @@ const POLL_INTERVAL_MS = 15_000;
 interface ManualFeedResponse {
   error?: string;
   dispenseAmountG?: number;
-  feedEvent?: FeedEvent;
+  command?: FeederCommand;
 }
 
 interface DashboardClientProps {
@@ -39,6 +53,14 @@ export function DashboardClient({
     message: "",
     visible: false,
   });
+
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Lets the realtime handler below reach the in-flight feed without the
+  // subscription effect (keyed on device_id) closing over handleManualFeed.
+  const pendingFeedRef = useRef<{
+    commandId: string;
+    onUpdate: (row: FeederCommand) => void;
+  } | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -84,6 +106,16 @@ export function DashboardClient({
           setStatus(payload.new);
         },
       )
+      .on<FeederCommand>(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "feeder_commands",
+          filter: `device_id=eq.${pet.device_id}`,
+        },
+        (payload) => pendingFeedRef.current?.onUpdate(payload.new),
+      )
       .subscribe((subStatus) => {
         if (subStatus === "SUBSCRIBED" && pollTimer) {
           clearInterval(pollTimer);
@@ -102,6 +134,12 @@ export function DashboardClient({
     };
   }, [pet.device_id]);
 
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
+
   const showLowEatingAlert = useMemo(() => {
     const latestConsumed = recentEvents.find((e) => e.actual_eaten_g > 0);
     if (!latestConsumed) return false;
@@ -111,25 +149,96 @@ export function DashboardClient({
     return isEatingLow(latestConsumed.actual_eaten_g, baseline);
   }, [recentEvents]);
 
+  // The "กำลังเทอาหาร..." stage has to stay up until the feeder answers, so the
+  // hide timer is owned by a ref and cleared on every new toast. The old
+  // unconditional setTimeout in handleManualFeed's finally would have hidden
+  // the result message three seconds after the *request* went out.
+  const showToast = useCallback((message: string, autoHide: boolean) => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    setToast({ message, visible: true });
+    if (autoHide) {
+      hideTimerRef.current = setTimeout(
+        () => setToast((t) => ({ ...t, visible: false })),
+        TOAST_HIDE_MS,
+      );
+    }
+  }, []);
+
   const handleManualFeed = useCallback(async () => {
+    showToast("กำลังเทอาหาร...", false);
+
+    let commandId: string;
     try {
       const res = await fetch("/api/feed/manual", { method: "POST" });
       const body: ManualFeedResponse = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        setToast({ message: body.error ?? "ให้อาหารไม่สำเร็จ กรุณาลองใหม่", visible: true });
-      } else {
-        setToast({
-          message: `เทอาหารแล้ว ${Math.round(body.dispenseAmountG ?? 0)}g`,
-          visible: true,
-        });
+      if (!res.ok || !body.command) {
+        showToast(body.error ?? "ให้อาหารไม่สำเร็จ กรุณาลองใหม่", true);
+        return;
       }
+      commandId = body.command.id;
     } catch {
-      setToast({ message: "เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่", visible: true });
-    } finally {
-      setTimeout(() => setToast((t) => ({ ...t, visible: false })), 3000);
+      showToast("เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่", true);
+      return;
     }
-  }, []);
+
+    // Awaiting this is what keeps ManualFeedButton's spinner going: it owns
+    // its own loading state and clears it when this promise settles.
+    const message = await new Promise<string>((resolve) => {
+      let timer: ReturnType<typeof setTimeout>;
+
+      const settle = (m: string) => {
+        clearTimeout(timer);
+        pendingFeedRef.current = null;
+        resolve(m);
+      };
+
+      // Two deadlines, because they mean different things: a feeder polling at
+      // 1 Hz that hasn't claimed the command is simply not there, while one
+      // that has claimed it still has a servo run to finish.
+      const giveUp = async (reason: "pickup" | "execute") => {
+        const supabase = createClient();
+
+        // Don't cry failure without looking. If the realtime channel dropped,
+        // or the result landed between the fetch returning and this handler
+        // being registered, the command may already be finished — and telling
+        // someone a feed failed when it didn't invites a second one.
+        const { data: row } = await supabase
+          .from("feeder_commands")
+          .select("*")
+          .eq("id", commandId)
+          .maybeSingle();
+
+        if (row && isTerminalStatus(row.status)) {
+          settle(feedResultMessage(row));
+          return;
+        }
+
+        // Nothing polls while the feeder is offline, so nothing would ever run
+        // the lazy expiry. Poking device_health() flips the row to failed
+        // server-side, so the database agrees with what the user just saw.
+        void supabase.rpc("device_health", { p_device_id: pet.device_id });
+        settle(feedTimeoutMessage(reason));
+      };
+
+      timer = setTimeout(() => void giveUp("pickup"), PENDING_TIMEOUT_MS);
+
+      pendingFeedRef.current = {
+        commandId,
+        onUpdate: (row) => {
+          if (row.id !== commandId) return;
+          if (row.status === "running") {
+            clearTimeout(timer);
+            timer = setTimeout(() => void giveUp("execute"), RUNNING_TIMEOUT_MS);
+            return;
+          }
+          if (isTerminalStatus(row.status)) settle(feedResultMessage(row));
+        },
+      };
+    });
+
+    showToast(message, true);
+  }, [pet.device_id, showToast]);
 
   return (
     <div className="min-h-screen pb-28 md:pb-8 md:pl-24">

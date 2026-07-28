@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getPet } from "@/lib/device";
-import { computeDispenseAmount } from "@/lib/feeding-logic";
-import type { MealSlot } from "@/lib/types";
-
-function currentMealSlot(): MealSlot {
-  const hour = new Date().getHours();
-  if (hour < 11) return "breakfast";
-  if (hour < 17) return "lunch";
-  return "dinner";
-}
+import { computeDispenseAmount, mealSlotForDate } from "@/lib/feeding-logic";
 
 export async function POST() {
   const supabase = await createClient();
@@ -32,24 +24,24 @@ export async function POST() {
     latestReading?.tray_weight_g ?? 0,
   );
 
-  // TODO(hardware): this row records the commanded dispense amount with
-  // actual_eaten_g = 0. Once the device measures the post-meal tray-weight
-  // delta, it should update this row (or insert a follow-up feed_event) with
-  // the real actual_eaten_g so the low-eating alert has data to compare against.
-  const { data: feedEvent, error: insertError } = await supabase
-    .from("feed_events")
-    .insert({
-      device_id: pet.device_id,
-      meal_slot: currentMealSlot(),
-      target_g: dispenseAmountG,
-      actual_eaten_g: 0,
-    })
-    .select()
-    .single();
+  // This route can no longer assert that a meal happened — only the feeder
+  // knows whether food actually came out. It queues a command; the feed_event
+  // is written by device_report_result() once the hardware reports back.
+  //
+  // The meal slot is decided here, at enqueue time, rather than when the
+  // device executes: a command queued at 16:59 and dispensed at 17:03 belongs
+  // to lunch, because that is when the human asked for it.
+  const { data: command, error } = await supabase.rpc("enqueue_feed_command", {
+    p_device_id: pet.device_id,
+    p_target_g: dispenseAmountG,
+    p_meal_slot: mealSlotForDate(new Date()),
+  });
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ dispenseAmountG, feedEvent }, { status: 201 });
+  // 202, not 201: the command is accepted, not carried out. The dashboard
+  // waits on the realtime status change before it tells the user anything.
+  return NextResponse.json({ dispenseAmountG, command }, { status: 202 });
 }
