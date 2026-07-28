@@ -40,6 +40,9 @@ yarn-error.log*
 # firmware secrets (config.example.h is intentionally tracked as a template)
 firmware/**/config.h
 
+# one-time device provisioning (holds a secret hash; not a migration)
+supabase/provision_*.sql
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
