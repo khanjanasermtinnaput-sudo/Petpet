@@ -64,6 +64,12 @@ static float cmdTargetG = 0.0f;
 static float trayBeforeG = 0.0f;
 static float trayAfterG = 0.0f;
 static bool haveWeights = false;
+// Set when a dispense was cut short by a WiFi drop. cmdId is deliberately kept
+// (not cleared) in that case so ST_REPORT can tell the server the true
+// outcome once reconnected, instead of leaving the command to rot until the
+// server's 120s timeout — which would also block a fresh Feed Now press for
+// that whole window, since only one active command per device is allowed.
+static bool cmdAborted = false;
 
 // Deadlines.
 static uint32_t nextPollAt = 0;
@@ -144,7 +150,10 @@ static int postRpc(const char* fn, const char* body, JsonDocument* out) {
   snprintf(url, sizeof(url), "https://%s/rest/v1/rpc/%s", SUPABASE_HOST, fn);
 
   if (!http.begin(tlsClient, url)) {
-    Serial.println(F("[http] begin failed"));
+    // Almost always a malformed URL from a bad SUPABASE_HOST in config.h, not
+    // a transient fault -- printed with fn so it's clear which RPC call site
+    // triggered it if this ever fires mid-sequence.
+    Serial.printf("[http] %s: begin() failed - check SUPABASE_HOST in config.h\n", fn);
     return -1000;
   }
 
@@ -201,6 +210,7 @@ static void pollForCommand() {
   strncpy(cmdId, id, sizeof(cmdId) - 1);
   cmdId[sizeof(cmdId) - 1] = '\0';
   cmdTargetG = doc["target_g"] | 0.0f;
+  cmdAborted = false;
 
   Serial.printf("[cmd] %s target=%.1fg\n", cmdId, cmdTargetG);
   state = ST_DISPENSE_OPEN;
@@ -245,6 +255,7 @@ static void reportResult(bool success, const char* errorCode) {
 #endif
 
     cmdId[0] = '\0';
+    cmdAborted = false;
     reportAttempts = 0;
     state = ST_IDLE;
     return;
@@ -256,6 +267,7 @@ static void reportResult(bool success, const char* errorCode) {
   if (++reportAttempts >= 3) {
     Serial.println(F("[cmd] giving up on report; server will time it out"));
     cmdId[0] = '\0';
+    cmdAborted = false;
     reportAttempts = 0;
     state = ST_IDLE;
     return;
@@ -381,10 +393,13 @@ static void netInit() {
   nextPollAt = millis();
   nextReadingAt = millis();
 
-  // Resume an unreported result instead of dropping it. If the network died
-  // between the gate closing and the POST landing, going straight to ST_IDLE
-  // lost the meal: the row expired as timeout_execute even though the food
-  // was delivered. device_report_result() accepts a late success report.
+  // Resume an unreported result instead of dropping it. cmdId survives a WiFi
+  // outage in exactly two cases: the network died between the gate closing
+  // and the POST landing (device_report_result() accepts the late success
+  // report), or it died mid-dispense (cmdAborted is set, reported as
+  // "aborted"). Either way, going straight to ST_IDLE here would silently
+  // drop the outcome and leave the command to rot until the server times it
+  // out.
   state = (cmdId[0] != '\0') ? ST_REPORT : ST_IDLE;
   nextReportAt = millis();
   reportAttempts = 0;
@@ -396,14 +411,17 @@ void loop() {
     if (state != ST_WIFI_CONNECT) {
       Serial.println(F("[wifi] lost"));
 
-      // Losing WiFi must not leave food pouring. The command stays 'running'
-      // server-side and expire_stale_commands() fails it as timeout_execute
-      // after 120s, so the user is told it failed rather than being shown a
-      // success for a meal that was cut short.
+      // Losing WiFi must not leave food pouring. The gate is closed
+      // immediately, unconditionally of the network. cmdId is deliberately
+      // NOT cleared here: ST_REPORT uses it to tell the server the real
+      // outcome ("aborted") as soon as the connection comes back, rather than
+      // leaving the command to rot until the server's 120s timeout — which
+      // would also block a fresh Feed Now press for that whole window, since
+      // the schema allows only one active command per device.
       if (dispensing()) {
         Serial.println(F("[servo] emergency close: wifi lost mid-dispense"));
         closeGate();
-        cmdId[0] = '\0';
+        cmdAborted = true;
       }
 
       // Force a fresh socket; session resumption makes reconnecting cheap.
@@ -549,6 +567,15 @@ void loop() {
 
     case ST_REPORT: {
       if (!due(nextReportAt)) break;
+
+      // A dispense that was cut short by a WiFi drop is reported the moment
+      // the connection is back, instead of waiting out the server's 120s
+      // timeout. Checked ahead of the empty_tank heuristic below since the
+      // weights from an interrupted dispense aren't meaningful anyway.
+      if (cmdAborted) {
+        reportResult(false, "aborted");
+        break;
+      }
 
 #if HAS_LOAD_CELL
       // The load cell is the only thing that can tell "the gate opened" from

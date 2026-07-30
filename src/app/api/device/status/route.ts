@@ -23,6 +23,11 @@ export async function GET() {
   });
 
   if (error) {
+    console.error("[device/status] device_health failed", {
+      device_id: pet.device_id,
+      code: error.code,
+      message: error.message,
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

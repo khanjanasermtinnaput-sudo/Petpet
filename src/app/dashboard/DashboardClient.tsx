@@ -175,11 +175,16 @@ export function DashboardClient({
       const body: ManualFeedResponse = await res.json().catch(() => ({}));
 
       if (!res.ok || !body.command) {
+        console.error("[feed] /api/feed/manual rejected the request", {
+          status: res.status,
+          error: body.error,
+        });
         showToast(body.error ?? "ให้อาหารไม่สำเร็จ กรุณาลองใหม่", true);
         return;
       }
       commandId = body.command.id;
-    } catch {
+    } catch (err) {
+      console.error("[feed] /api/feed/manual unreachable", err);
       showToast("เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่", true);
       return;
     }
@@ -218,6 +223,10 @@ export function DashboardClient({
           settle(feedResultMessage(row), row.status === "success");
           return;
         }
+
+        console.error(
+          `[feed] gave up waiting for feeder ${pet.device_id}: no ${reason === "pickup" ? "poll" : "result"} within the deadline (command ${commandId}) — feeder is likely offline or its DEVICE_SECRET is wrong`,
+        );
 
         // Nothing polls while the feeder is offline, so nothing would ever run
         // the lazy expiry. Poking device_health() flips the row to failed

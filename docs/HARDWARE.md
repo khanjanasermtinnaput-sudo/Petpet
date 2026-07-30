@@ -474,7 +474,8 @@ value and set `SCALE_TARE_RAW`. Put a known weight on, then
 | Handshake fails, `-1` from HTTPClient | buffer too small, or a 1970 clock with `PIN_ROOT_CA 1` | let the MFLN probe pick the buffer; check NTP |
 | Random reboots mid-dispense | servo browning out the board | separate 5 V supply + bulk capacitor |
 | Heap drifting down to ~20 KB | fragmentation | the firmware skips a cycle below 20 KB; check for a modified request path building `String`s |
-| Command stuck `running` forever | device rebooted mid-feed | resolves itself — `expire_stale_commands()` fails it after 120s |
+| Command stuck `running` forever | device rebooted or lost power mid-feed (not just WiFi loss — see the next row) | resolves itself — `expire_stale_commands()` fails it after 120s |
+| Command `failed` with `error = aborted` within a couple seconds of pressing Feed Now, not 120s | expected: WiFi dropped mid-dispense. The gate closed immediately (no food kept pouring); the firmware reports `aborted` the moment it reconnects instead of leaving the row to rot until the server timeout, and a fresh press is not blocked in the meantime | nothing to fix — this is the fast path working. If it happens on every feed, the WiFi link near the feeder is the actual problem |
 | HTTP 429 from Feed Now | more than 10 commands for this device in the last hour | wait, or raise the threshold in `enqueue_feed_command` |
 | Command `success` with `error = recovered_late_report` | the food was dispensed but the report arrived after the 120s timeout had already failed the row | nothing to fix — the meal was recovered rather than lost. Frequent occurrences mean a flaky link |
 | Feed reported `empty_tank` with a load cell fitted | a full dispense added <25% of target to the tray | refill the hopper, or check the chute for a jam |
