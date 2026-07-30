@@ -89,14 +89,24 @@
 // Supabase switches issuing CAs.
 #define PIN_ROOT_CA          0
 
-#if PIN_ROOT_CA
 // Paste the current root, e.g. https://letsencrypt.org/certs/isrgrootx1.pem
 // It is left blank deliberately: shipping a hardcoded root would rot silently.
-#define ROOT_CA_PEM R"EOF(
------BEGIN CERTIFICATE-----
-...paste here...
------END CERTIFICATE-----
-)EOF"
-#endif
+//
+// Adjacent string-literal concatenation, not a raw string literal — verified
+// against a real build of this project's exact toolchain
+// (xtensa-lx106-elf-g++, esp8266 core 3.1.2): a multi-line R"EOF(...)EOF"
+// fails there with "unterminated raw string" even in complete isolation, one
+// line per PEM line, unrelated to anything else in this file. Single-line
+// raw strings compile fine on the same toolchain — it is specifically the
+// multi-line form that is broken. Each line needs its own trailing "\n":
+// PEM parsers split on newlines between the base64 lines.
+//
+// Defined unconditionally, not inside "#if PIN_ROOT_CA" — costs nothing when
+// PIN_ROOT_CA is 0, since the .ino only ever reads ROOT_CA_PEM inside its own
+// "#if PIN_ROOT_CA".
+#define ROOT_CA_PEM \
+  "-----BEGIN CERTIFICATE-----\n" \
+  "...paste here...\n" \
+  "-----END CERTIFICATE-----\n"
 
 #endif  // PETPET_CONFIG_H
