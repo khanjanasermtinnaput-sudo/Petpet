@@ -3,12 +3,18 @@
 import { useState } from "react";
 import { NeuIconButton } from "@/components/neu/NeuIconButton";
 
-export function ManualFeedButton({ onFeed }: { onFeed: () => Promise<void> }) {
+export function ManualFeedButton({
+  onFeed,
+  disabled = false,
+}: {
+  onFeed: () => Promise<void>;
+  disabled?: boolean;
+}) {
   const [loading, setLoading] = useState(false);
   const [pressed, setPressed] = useState(false);
 
   async function handleClick() {
-    if (loading) return;
+    if (loading || disabled) return;
     setPressed(true);
     setLoading(true);
     try {
@@ -24,7 +30,7 @@ export function ManualFeedButton({ onFeed }: { onFeed: () => Promise<void> }) {
       <NeuIconButton
         aria-label="เทอาหารตอนนี้"
         pressed={pressed}
-        disabled={loading}
+        disabled={loading || disabled}
         onClick={handleClick}
         className="h-16 w-16 text-2xl text-neu-accent"
       >

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { canFeedNow, type DeviceStatusResponse } from "@/lib/device-status";
 import { isEatingLow, rollingAverageForSlot } from "@/lib/feeding-logic";
 import {
   feedResultMessage,
@@ -22,6 +23,7 @@ import type {
 import { TopBar } from "@/components/dashboard/TopBar";
 import { TrayHeroCard } from "@/components/dashboard/TrayHeroCard";
 import { LowEatingAlert } from "@/components/dashboard/LowEatingAlert";
+import { DeviceConnectionStatus } from "@/components/dashboard/DeviceConnectionStatus";
 import { ManualFeedButton } from "@/components/dashboard/ManualFeedButton";
 import { NavRail } from "@/components/dashboard/NavRail";
 import { NeuToast } from "@/components/neu/NeuToast";
@@ -50,6 +52,7 @@ export function DashboardClient({
   const router = useRouter();
   const [reading, setReading] = useState(initialReading);
   const [status, setStatus] = useState(initialStatus);
+  const [deviceConnection, setDeviceConnection] = useState<DeviceStatusResponse | null>(null);
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
     message: "",
@@ -167,6 +170,11 @@ export function DashboardClient({
   }, []);
 
   const handleManualFeed = useCallback(async () => {
+    if (!canFeedNow(deviceConnection)) {
+      showToast("เครื่องให้อาหารยังไม่พร้อมใช้งาน", true);
+      return;
+    }
+
     showToast("กำลังเทอาหาร...", false);
 
     let commandId: string;
@@ -259,12 +267,13 @@ export function DashboardClient({
     // a completed feed leaves the low-eating alert and /history showing
     // pre-feed data until a manual reload.
     if (succeeded) router.refresh();
-  }, [pet.device_id, router, showToast]);
+  }, [deviceConnection, pet.device_id, router, showToast]);
 
   return (
     <div className="min-h-screen pb-28 md:pb-8 md:pl-24">
       <TopBar petName={pet.name} uvOn={status?.uv_status ?? false} />
       <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 sm:px-8">
+        <DeviceConnectionStatus onStatusChange={setDeviceConnection} />
         {showLowEatingAlert && !alertDismissed && (
           <LowEatingAlert onDismiss={() => setAlertDismissed(true)} />
         )}
@@ -273,7 +282,7 @@ export function DashboardClient({
           targetG={pet.daily_target_g}
         />
       </main>
-      <ManualFeedButton onFeed={handleManualFeed} />
+      <ManualFeedButton onFeed={handleManualFeed} disabled={!canFeedNow(deviceConnection)} />
       <NeuToast message={toast.message} visible={toast.visible} />
       <NavRail />
     </div>
