@@ -1,20 +1,63 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getPet } from "@/lib/device";
+import { DEVICE_ID, getPet } from "@/lib/device";
+import { deviceStatusFromHealth, type DeviceHealthRpcResult } from "@/lib/device-status";
 import { computeDispenseAmount, mealSlotForDate } from "@/lib/feeding-logic";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export async function POST() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const pet = await getPet(supabase);
 
   if (!pet) {
     return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยง" }, { status: 404 });
   }
 
+  if (pet.device_id !== DEVICE_ID) {
+    console.warn("[feed/manual] pet is paired with a non-canonical device", {
+      pet_device_id: pet.device_id,
+    });
+    return NextResponse.json({ error: "ไม่พบเครื่องให้อาหารที่ลงทะเบียน" }, { status: 409 });
+  }
+
+  const { data: device, error: deviceError } = await supabase
+    .from("devices")
+    .select("device_id")
+    .eq("device_id", DEVICE_ID)
+    .maybeSingle();
+  if (deviceError) {
+    console.error("[feed/manual] device lookup failed", { code: deviceError.code });
+    return NextResponse.json({ error: "ตรวจสอบสถานะเครื่องไม่ได้" }, { status: 503 });
+  }
+  if (!device) {
+    return NextResponse.json({ error: "ไม่พบเครื่อง PETFEEDER-001 ในระบบ" }, { status: 409 });
+  }
+
+  const { data: health, error: healthError } = await supabase.rpc("device_health", {
+    p_device_id: DEVICE_ID,
+  });
+  if (healthError) {
+    console.error("[feed/manual] device_health failed", { code: healthError.code });
+    return NextResponse.json({ error: "ตรวจสอบสถานะเครื่องไม่ได้" }, { status: 503 });
+  }
+
+  const deviceStatus = deviceStatusFromHealth(DEVICE_ID, {
+    ...((health ?? {}) as DeviceHealthRpcResult),
+    exists: true,
+  });
+  if (!deviceStatus.online) {
+    return NextResponse.json(
+      {
+        error: "เครื่องให้อาหารไม่ได้เชื่อมต่ออยู่ กรุณาตรวจสอบไฟ Wi-Fi หรือเฟิร์มแวร์",
+        reason: deviceStatus.reason,
+      },
+      { status: 409 },
+    );
+  }
+
   const { data: latestReading } = await supabase
     .from("feeder_readings")
     .select("tray_weight_g")
-    .eq("device_id", pet.device_id)
+    .eq("device_id", DEVICE_ID)
     .order("recorded_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -24,23 +67,13 @@ export async function POST() {
     latestReading?.tray_weight_g ?? 0,
   );
 
-  // This route can no longer assert that a meal happened — only the feeder
-  // knows whether food actually came out. It queues a command; the feed_event
-  // is written by device_report_result() once the hardware reports back.
-  //
-  // The meal slot is decided here, at enqueue time, rather than when the
-  // device executes: a command queued at 16:59 and dispensed at 17:03 belongs
-  // to lunch, because that is when the human asked for it.
   const { data: command, error } = await supabase.rpc("enqueue_feed_command", {
-    p_device_id: pet.device_id,
+    p_device_id: DEVICE_ID,
     p_target_g: dispenseAmountG,
     p_meal_slot: mealSlotForDate(new Date()),
   });
 
   if (error) {
-    // enqueue_feed_command raises SQLSTATE 54000 when a device has been asked
-    // to feed too often. That is a caller problem, not a server fault, so it
-    // gets its own status and a message the user can act on.
     if (error.code === "54000") {
       return NextResponse.json(
         { error: "สั่งให้อาหารถี่เกินไป กรุณารอสักครู่แล้วลองใหม่" },
@@ -48,14 +81,12 @@ export async function POST() {
       );
     }
     console.error("[feed/manual] enqueue failed", {
-      device_id: pet.device_id,
+      device_id: DEVICE_ID,
       code: error.code,
       message: error.message,
     });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "ไม่สามารถคิวคำสั่งให้อาหารได้" }, { status: 500 });
   }
 
-  // 202, not 201: the command is accepted, not carried out. The dashboard
-  // waits on the realtime status change before it tells the user anything.
   return NextResponse.json({ dispenseAmountG, command }, { status: 202 });
 }

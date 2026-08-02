@@ -6,7 +6,11 @@
  * for nothing), so this must comfortably clear that throttle. 30s tolerates
  * two missed heartbeats plus a slow round trip.
  */
-export const OFFLINE_AFTER_MS = 30_000;
+/** Firmware writes a heartbeat at most every 10 seconds. */
+export const DEVICE_HEARTBEAT_INTERVAL_MS = 10_000;
+
+/** Two missed heartbeats are tolerated before declaring the feeder offline. */
+export const OFFLINE_AFTER_MS = DEVICE_HEARTBEAT_INTERVAL_MS * 2;
 
 /**
  * Judged against the *server's* clock, not the browser's.

@@ -528,3 +528,62 @@ by hand walks the toast through both stages.
   under the tray.
 - No OTA updates: firmware changes need a USB cable.
 - No alerting on repeated failures and no dead-letter queue.
+
+---
+
+## 9. Device connection status
+
+The dashboard calls `GET /api/device/status?deviceId=PETFEEDER-001` immediately,
+on every `device_status` Realtime change, and every **5 seconds** as a fallback.
+The endpoint calls `device_health()` and returns database timestamps; the browser
+never decides connectivity from its own clock.
+
+`device_poll_command()` records `last_seen_at` at most every 10 seconds. The
+feeder is **online** only when that timestamp is less than **20 seconds** old
+according to Postgres. This allows two missed heartbeats without flashing a
+false offline state.
+
+| Dashboard state | Meaning | Feed Now |
+|---|---|---|
+| Green, `เชื่อมต่อกับเครื่องแล้ว` | Device exists and has a recent heartbeat | Enabled |
+| Red, `ไม่ได้เชื่อมต่อกับเครื่อง` | Device exists but its heartbeat is stale | Disabled |
+| Red, `ไม่พบเครื่อง PETFEEDER-001 ในระบบ` | No matching `devices` registration | Disabled |
+| Red, `ตรวจสอบสถานะเครื่องไม่ได้` | API/database request failed | Disabled |
+
+The status card announces changes through `aria-live`, includes the last-seen
+time, and the 5-second polling continues if Realtime is disconnected.
+
+### Registration and project checks
+
+Use the same project reference in all three places:
+
+1. `NEXT_PUBLIC_SUPABASE_URL` must be `https://<project-ref>.supabase.co`.
+2. `SUPABASE_HOST` in the ignored `firmware/petpet_feeder/config.h` must be
+   `<project-ref>.supabase.co` (no scheme or slash).
+3. `DEVICE_ID` in that firmware config must be `PETFEEDER-001`.
+
+Never print or commit `DEVICE_SECRET`. You may safely inspect only its matching
+row and heartbeat with the SQL below:
+
+```sql
+select d.device_id, d.label, d.created_at,
+       s.last_seen_at, s.firmware_version, s.wifi_rssi
+from devices d
+left join device_status s using (device_id)
+where d.device_id = 'PETFEEDER-001';
+```
+
+If the dashboard says `ไม่พบเครื่อง PETFEEDER-001 ในระบบ`, provision the row
+using the existing secret hash. Do not replace a working secret merely to
+repair status. If the row truly does not exist, generate a new 256-bit token,
+store only its SHA-256 hash, and put the plaintext once in ignored `config.h`.
+
+### End-to-end verification
+
+After applying the latest migration, open the dashboard and Serial Monitor at
+115200. A healthy device prints `[boot]`, `[wifi] connected`, `[tls]`, and then
+periodic `[heap]` lines. Within five seconds of the next heartbeat, the status
+card must turn green. Press Feed Now once: expect `[cmd] <uuid> target=...`,
+`[servo] open ...`, `[servo] closed`, then `[cmd] <uuid> reported`. The only
+manual part of this check is observing physical servo/gate movement; command,
+status, event, and history rows can all be verified in Supabase.

@@ -7,6 +7,10 @@ import type { Pet } from "./types";
  * there's no per-user device claiming — the ESP32 firmware and the app
  * agree on this fixed ID out of band.
  */
+/**
+ * The sole feeder paired with this single-tenant application.
+ * Firmware owns the matching compile-time value in its ignored config.h.
+ */
 export const DEVICE_ID = "PETFEEDER-001";
 
 export async function getPet(supabase: SupabaseClient<Database>): Promise<Pet | null> {
