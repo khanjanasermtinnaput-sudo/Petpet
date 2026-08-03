@@ -5,7 +5,7 @@ import {
   unavailableDeviceStatus,
   type DeviceHealthRpcResult,
 } from "@/lib/device-status";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,21 +23,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = createAdminClient();
-    const { data: device, error: deviceError } = await supabase
-      .from("devices")
-      .select("device_id")
-      .eq("device_id", DEVICE_ID)
-      .maybeSingle();
-
-    if (deviceError) throw deviceError;
-    if (!device) {
-      return NextResponse.json(
-        deviceStatusFromHealth(DEVICE_ID, { exists: false, server_time: new Date().toISOString() }),
-        { headers: NO_STORE_HEADERS },
-      );
-    }
-
+    // device_health is SECURITY DEFINER and returns only non-sensitive health
+    // data, including the registration boolean. The browser-safe anon client
+    // is sufficient here and keeps status checks independent of service-role
+    // deployment configuration.
+    const supabase = await createClient();
     const { data, error } = await supabase.rpc("device_health", {
       p_device_id: DEVICE_ID,
     });
@@ -46,7 +36,6 @@ export async function GET(request: Request) {
     return NextResponse.json(
       deviceStatusFromHealth(DEVICE_ID, {
         ...((data ?? {}) as DeviceHealthRpcResult),
-        exists: true,
       }),
       { headers: NO_STORE_HEADERS },
     );
