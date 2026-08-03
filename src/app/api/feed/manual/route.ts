@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { DEVICE_ID, getPet } from "@/lib/device";
 import { deviceStatusFromHealth, type DeviceHealthRpcResult } from "@/lib/device-status";
 import { computeDispenseAmount, mealSlotForDate } from "@/lib/feeding-logic";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST() {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const pet = await getPet(supabase);
 
   if (!pet) {
@@ -19,19 +19,6 @@ export async function POST() {
     return NextResponse.json({ error: "ไม่พบเครื่องให้อาหารที่ลงทะเบียน" }, { status: 409 });
   }
 
-  const { data: device, error: deviceError } = await supabase
-    .from("devices")
-    .select("device_id")
-    .eq("device_id", DEVICE_ID)
-    .maybeSingle();
-  if (deviceError) {
-    console.error("[feed/manual] device lookup failed", { code: deviceError.code });
-    return NextResponse.json({ error: "ตรวจสอบสถานะเครื่องไม่ได้" }, { status: 503 });
-  }
-  if (!device) {
-    return NextResponse.json({ error: "ไม่พบเครื่อง PETFEEDER-001 ในระบบ" }, { status: 409 });
-  }
-
   const { data: health, error: healthError } = await supabase.rpc("device_health", {
     p_device_id: DEVICE_ID,
   });
@@ -40,10 +27,11 @@ export async function POST() {
     return NextResponse.json({ error: "ตรวจสอบสถานะเครื่องไม่ได้" }, { status: 503 });
   }
 
-  const deviceStatus = deviceStatusFromHealth(DEVICE_ID, {
-    ...((health ?? {}) as DeviceHealthRpcResult),
-    exists: true,
-  });
+  const healthResult = (health ?? {}) as DeviceHealthRpcResult;
+  if (healthResult.exists !== true) {
+    return NextResponse.json({ error: "ไม่พบเครื่อง PETFEEDER-001 ในระบบ" }, { status: 409 });
+  }
+  const deviceStatus = deviceStatusFromHealth(DEVICE_ID, healthResult);
   if (!deviceStatus.online) {
     return NextResponse.json(
       {
