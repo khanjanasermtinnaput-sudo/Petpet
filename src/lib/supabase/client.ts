@@ -1,12 +1,8 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "./database.types";
 
-/**
- * Single-tenant app — no user auth/session, so a plain client (no cookie
- * handling) is all either the browser or the server needs.
- */
 export function createClient() {
-  return createSupabaseClient<Database>(
+  return createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );

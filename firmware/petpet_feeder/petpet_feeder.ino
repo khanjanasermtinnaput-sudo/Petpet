@@ -22,6 +22,13 @@
 
 #include "config.h"
 
+#ifndef UV_RELAY_PIN
+#define UV_RELAY_PIN 5
+#endif
+#ifndef UV_RELAY_ACTIVE_HIGH
+#define UV_RELAY_ACTIVE_HIGH 1
+#endif
+
 // --------------------------------------------------------------------------
 // Scheduling
 //
@@ -37,6 +44,7 @@ enum State {
   ST_WIFI_CONNECT,
   ST_NET_INIT,
   ST_IDLE,
+  ST_APPLY_UV,
   ST_DISPENSE_OPEN,
   ST_DISPENSE_WAIT,
   ST_DISPENSE_CLOSE,
@@ -70,6 +78,9 @@ static bool haveWeights = false;
 // server's 120s timeout — which would also block a fresh Feed Now press for
 // that whole window, since only one active command per device is allowed.
 static bool cmdAborted = false;
+static bool cmdIsFeed = false;
+static bool cmdUvOn = false;
+static bool uvOn = false;
 
 // Deadlines.
 static uint32_t nextPollAt = 0;
@@ -192,8 +203,8 @@ static int postRpc(const char* fn, const char* body, JsonDocument* out) {
 static void pollForCommand() {
   char body[256];
   snprintf(body, sizeof(body),
-           "{\"p_device_id\":\"%s\",\"p_secret\":\"%s\"}",
-           DEVICE_ID, DEVICE_SECRET);
+           "{\"p_device_id\":\"%s\",\"p_secret\":\"%s\",\"p_uv_status\":%s}",
+           DEVICE_ID, DEVICE_SECRET, uvOn ? "true" : "false");
 
   JsonDocument doc;
   int code = postRpc("device_poll_command", body, &doc);
@@ -209,17 +220,20 @@ static void pollForCommand() {
 
   strncpy(cmdId, id, sizeof(cmdId) - 1);
   cmdId[sizeof(cmdId) - 1] = '\0';
+  const char* command = doc["command"] | "feed";
+  cmdIsFeed = strcmp(command, "feed") == 0;
+  cmdUvOn = strcmp(command, "uv_on") == 0;
   cmdTargetG = doc["target_g"] | 0.0f;
   cmdAborted = false;
 
   Serial.printf("[cmd] %s target=%.1fg\n", cmdId, cmdTargetG);
-  state = ST_DISPENSE_OPEN;
+  state = cmdIsFeed ? ST_DISPENSE_OPEN : ST_APPLY_UV;
 }
 
 static void reportResult(bool success, const char* errorCode) {
   char body[384];
 
-  if (success && haveWeights) {
+  if (success && cmdIsFeed && haveWeights) {
     float dispensed = trayAfterG - trayBeforeG;
     if (dispensed < 0.0f) dispensed = 0.0f;
     snprintf(body, sizeof(body),
@@ -246,7 +260,7 @@ static void reportResult(bool success, const char* errorCode) {
     Serial.printf("[cmd] %s reported\n", cmdId);
 
 #if HAS_LOAD_CELL
-    if (success && haveWeights) {
+    if (success && cmdIsFeed && haveWeights) {
       strncpy(settleCmdId, cmdId, sizeof(settleCmdId) - 1);
       settleCmdId[sizeof(settleCmdId) - 1] = '\0';
       settleAt = millis() + SETTLE_DELAY_MS;
@@ -256,6 +270,7 @@ static void reportResult(bool success, const char* errorCode) {
 
     cmdId[0] = '\0';
     cmdAborted = false;
+    cmdIsFeed = false;
     reportAttempts = 0;
     state = ST_IDLE;
     return;
@@ -268,6 +283,7 @@ static void reportResult(bool success, const char* errorCode) {
     Serial.println(F("[cmd] giving up on report; server will time it out"));
     cmdId[0] = '\0';
     cmdAborted = false;
+    cmdIsFeed = false;
     reportAttempts = 0;
     state = ST_IDLE;
     return;
@@ -297,7 +313,7 @@ static void reportReading() {
            "\"p_tray_weight_g\":%.2f,\"p_tank_weight_g\":%.2f,"
            "\"p_wifi_rssi\":%d,\"p_firmware_version\":\"%s\"}",
            DEVICE_ID, DEVICE_SECRET, trayWeightG(), 0.0f,
-           WiFi.RSSI(), FIRMWARE_VERSION);
+           uvOn ? "true" : "false", WiFi.RSSI(), FIRMWARE_VERSION);
 
   postRpc("device_report_reading", body, nullptr);
 }
@@ -325,6 +341,14 @@ static void closeGate() {
   feedServo.detach();
 }
 
+static void setUvOutput(bool on) {
+#if UV_RELAY_ACTIVE_HIGH
+  digitalWrite(UV_RELAY_PIN, on ? HIGH : LOW);
+#else
+  digitalWrite(UV_RELAY_PIN, on ? LOW : HIGH);
+#endif
+}
+
 static void startWifi() {
   WiFi.mode(WIFI_STA);
   // Don't rewrite flash on every boot.
@@ -349,6 +373,9 @@ void setup() {
   feedServo.write(SERVO_CLOSED_ANGLE);
   delay(300);
   feedServo.detach();
+
+  pinMode(UV_RELAY_PIN, OUTPUT);
+  setUvOutput(false);
 
 #if HAS_LOAD_CELL
   pinMode(HX711_SCK_PIN, OUTPUT);
@@ -477,6 +504,12 @@ void loop() {
 
   // --- state machine ------------------------------------------------------
   switch (state) {
+    case ST_APPLY_UV:
+      setUvOutput(cmdUvOn);
+      uvOn = cmdUvOn;
+      reportResult(true, nullptr);
+      break;
+
     case ST_IDLE: {
       // A low heap makes a TLS write fail in ways that look like a network
       // fault. Skip the cycle rather than thrash.
