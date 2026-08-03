@@ -35,6 +35,31 @@ const ERROR_MESSAGES: Record<string, string> = {
   device_error: "เทอาหารไม่สำเร็จ กรุณาลองใหม่",
 };
 
+export type FeedErrorCode =
+  | "API_REQUEST_FAILED"
+  | "API_UNREACHABLE"
+  | "DEVICE_NOT_FOUND"
+  | "DEVICE_OFFLINE"
+  | "DATABASE_ERROR"
+  | "COMMAND_ENQUEUE_FAILED"
+  | "COMMAND_NOT_CLAIMED"
+  | "COMMAND_EXECUTION_TIMEOUT"
+  | "SERVO_ERROR"
+  | "EMPTY_TANK"
+  | "JAM"
+  | "NO_SCALE"
+  | "ABORTED"
+  | "DEVICE_ERROR"
+  | "RATE_LIMITED";
+
+export function feedOutcomeCode(outcome: FeedOutcome): string {
+  if (outcome.status === "success") return "OK";
+  return outcome.error ? outcome.error.toUpperCase() : "DEVICE_ERROR";
+}
+
+export function feedTimeoutCode(reason: "pickup" | "execute"): FeedErrorCode {
+  return reason === "pickup" ? "COMMAND_NOT_CLAIMED" : "COMMAND_EXECUTION_TIMEOUT";
+}
 const FALLBACK_ERROR_MESSAGE = "เทอาหารไม่สำเร็จ กรุณาลองใหม่";
 
 /** The subset of a feeder_commands row needed to describe its outcome. */

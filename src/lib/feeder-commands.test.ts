@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  feedOutcomeCode,
   feedResultMessage,
+  feedTimeoutCode,
   feedTimeoutMessage,
   isTerminalStatus,
   type FeedOutcome,
@@ -92,5 +94,14 @@ describe("feedTimeoutMessage", () => {
     expect(feedTimeoutMessage("execute")).toBe(
       feedResultMessage(outcome({ status: "failed", error: "timeout_execute" })),
     );
+  });
+});
+
+describe("feed error codes", () => {
+  it("distinguishes device success, servo failure, and timeout stages", () => {
+    expect(feedOutcomeCode(outcome())).toBe("OK");
+    expect(feedOutcomeCode(outcome({ status: "failed", error: "jam" }))).toBe("JAM");
+    expect(feedTimeoutCode("pickup")).toBe("COMMAND_NOT_CLAIMED");
+    expect(feedTimeoutCode("execute")).toBe("COMMAND_EXECUTION_TIMEOUT");
   });
 });
