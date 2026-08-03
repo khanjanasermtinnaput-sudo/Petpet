@@ -217,7 +217,6 @@ export type Database = {
           device_id: string;
           id: string;
           name: string;
-          breed: string;
           species: string;
           weight_kg: number;
         };
@@ -230,7 +229,6 @@ export type Database = {
           device_id: string;
           id?: string;
           name: string;
-          breed?: string;
           species?: string;
           weight_kg: number;
         };
@@ -243,36 +241,8 @@ export type Database = {
           device_id?: string;
           id?: string;
           name?: string;
-          breed?: string;
           species?: string;
           weight_kg?: number;
-        };
-        Relationships: [];
-      };
-      vet_chat_messages: {
-        Row: {
-          id: string;
-          user_id: string;
-          pet_id: string;
-          role: string;
-          content: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id?: string;
-          pet_id: string;
-          role: string;
-          content: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          pet_id?: string;
-          role?: string;
-          content?: string;
-          created_at?: string;
         };
         Relationships: [];
       };
@@ -286,7 +256,7 @@ export type Database = {
         Returns: Json;
       };
       device_poll_command: {
-        Args: { p_device_id: string; p_secret: string; p_uv_status?: boolean };
+        Args: { p_device_id: string; p_secret: string };
         Returns: Json;
       };
       device_report_consumption: {
@@ -321,10 +291,6 @@ export type Database = {
           p_tray_weight_g?: number;
         };
         Returns: Json;
-      };
-      enqueue_uv_command: {
-        Args: { p_device_id: string; p_uv_on: boolean };
-        Returns: Database["public"]["Tables"]["feeder_commands"]["Row"];
       };
       enqueue_feed_command: {
         Args: {

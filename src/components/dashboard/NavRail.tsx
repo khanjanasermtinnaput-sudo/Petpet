@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "หน้าหลัก", icon: "🏠" },
@@ -13,14 +12,6 @@ const NAV_ITEMS = [
 
 export function NavRail() {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function handleLogout() {
-    const { error } = await createClient().auth.signOut();
-    if (error) return;
-    router.replace("/login");
-    router.refresh();
-  }
 
   return (
     <nav
@@ -33,21 +24,19 @@ export function NavRail() {
           <Link
             key={item.href}
             href={item.href}
-            className={`neu-focusable flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold ${active ? "neu-inset text-neu-accent" : "text-neu-ink-muted"}`}
+            className={`neu-focusable flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold ${
+              active
+                ? "neu-inset text-neu-accent"
+                : "text-neu-ink-muted"
+            }`}
           >
-            <span className="text-lg" aria-hidden>{item.icon}</span>
+            <span className="text-lg" aria-hidden>
+              {item.icon}
+            </span>
             {item.label}
           </Link>
         );
       })}
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="neu-focusable flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold text-neu-ink-muted"
-      >
-        <span className="text-lg" aria-hidden>↪</span>
-        ออกจากระบบ
-      </button>
     </nav>
   );
 }

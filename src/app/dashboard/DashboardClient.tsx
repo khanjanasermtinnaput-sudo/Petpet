@@ -30,7 +30,6 @@ import { FeedCommandStatus, type FeedDiagnostic } from "@/components/dashboard/F
 import { ManualFeedButton } from "@/components/dashboard/ManualFeedButton";
 import { NavRail } from "@/components/dashboard/NavRail";
 import { NeuToast } from "@/components/neu/NeuToast";
-import { UvControl } from "@/components/dashboard/UvControl";
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -333,10 +332,6 @@ export function DashboardClient({
       <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 sm:px-8">
         <DeviceConnectionStatus onStatusChange={setDeviceConnection} />
         <FeedCommandStatus diagnostic={feedDiagnostic} onDismiss={() => setFeedDiagnostic(null)} />
-        <UvControl
-          uvOn={status?.uv_status ?? false}
-          deviceOnline={deviceConnection?.online ?? false}
-        />
         {showLowEatingAlert && !alertDismissed && (
           <LowEatingAlert onDismiss={() => setAlertDismissed(true)} />
         )}

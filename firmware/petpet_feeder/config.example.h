@@ -41,10 +41,6 @@
 #define SERVO_CLOSED_ANGLE   0
 #define SERVO_OPEN_ANGLE     90
 
-// Relay output for the UV sterilisation lamp. D1 / GPIO5 is safe at boot.
-#define UV_RELAY_PIN         5
-#define UV_RELAY_ACTIVE_HIGH 1
-
 // How fast food leaves the hopper with the gate open. Calibrate once: open
 // the gate for 10 seconds, weigh what came out, divide by 10. This is what
 // converts a target in grams into a gate-open duration.

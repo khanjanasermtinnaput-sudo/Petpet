@@ -11,7 +11,7 @@ export type FeedEvent = Omit<Tables<"feed_events">, "meal_slot"> & {
 };
 
 export type FeederCommandStatus = "pending" | "running" | "success" | "failed";
-export type FeederCommandKind = "feed" | "uv_on" | "uv_off";
+export type FeederCommandKind = "feed";
 export type FeederCommandSource = "app" | "schedule" | "retry";
 
 export type FeederCommand = Omit<
