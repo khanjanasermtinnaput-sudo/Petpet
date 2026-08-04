@@ -14,6 +14,7 @@ const BIRTH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(request: Request) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   let body: CreatePetBody;
   try {
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
   // Single-tenant app: at most one pet ever exists. Update it if present,
   // otherwise create it.
   const existing = await getPet(supabase);
+
+  if (existing && !user) {
+    return NextResponse.json({ error: "login required to update pet information" }, { status: 401 });
+  }
 
   const petFields = {
     name,
