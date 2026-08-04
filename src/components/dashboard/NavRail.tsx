@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogoutButton } from "@/components/auth/LogoutButton";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "หน้าหลัก", icon: "🏠" },
@@ -38,7 +37,6 @@ export function NavRail() {
           </Link>
         );
       })}
-      <LogoutButton />
     </nav>
   );
 }
