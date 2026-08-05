@@ -13,25 +13,48 @@ alter table feed_events add column if not exists pet_id uuid;
 -- The previous product had one pet per device. Preserve all legacy records by
 -- assigning them to that device's first profile before making attribution required.
 update feeding_schedule s
-   set pet_id = p.id
-  from lateral (
-    select id from pets where device_id = s.device_id order by created_at limit 1
-  ) p
+   set pet_id = (
+     select p.id
+       from pets p
+      where p.device_id = s.device_id
+      order by p.created_at, p.id
+      limit 1
+   )
  where s.pet_id is null;
 
 update feeder_commands c
-   set pet_id = p.id
-  from lateral (
-    select id from pets where device_id = c.device_id order by created_at limit 1
-  ) p
+   set pet_id = (
+     select p.id
+       from pets p
+      where p.device_id = c.device_id
+      order by p.created_at, p.id
+      limit 1
+   )
  where c.pet_id is null;
 
 update feed_events e
-   set pet_id = p.id
-  from lateral (
-    select id from pets where device_id = e.device_id order by created_at limit 1
-  ) p
+   set pet_id = (
+     select p.id
+       from pets p
+      where p.device_id = e.device_id
+      order by p.created_at, p.id
+      limit 1
+   )
  where e.pet_id is null;
+
+-- Stop with a useful error before adding NOT NULL. This keeps the migration
+-- atomic when legacy rows reference a feeder that has no pet profile yet.
+do $$
+begin
+  if exists (select 1 from feeding_schedule where pet_id is null)
+     or exists (select 1 from feeder_commands where pet_id is null)
+     or exists (select 1 from feed_events where pet_id is null) then
+    raise exception
+      'pet profile migration blocked: create a pet for every legacy device before retrying'
+      using errcode = '23502';
+  end if;
+end;
+$$;
 
 alter table feeding_schedule alter column pet_id set not null;
 alter table feeder_commands alter column pet_id set not null;
@@ -132,6 +155,15 @@ declare
   v_recent int;
 begin
   perform public.expire_stale_commands();
+
+  if not exists (
+    select 1
+      from public.pets p
+     where p.id = p_pet_id
+       and p.device_id = p_device_id
+  ) then
+    raise exception 'unknown pet for this device' using errcode = '22023';
+  end if;
 
   select * into v_cmd from public.feeder_commands
    where device_id = p_device_id and status in ('pending', 'running')

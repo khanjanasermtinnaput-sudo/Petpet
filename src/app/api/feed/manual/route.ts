@@ -2,10 +2,20 @@ import { NextResponse } from "next/server";
 import { DEVICE_ID } from "@/lib/device";
 import { getPet } from "@/lib/active-pet";
 import { deviceStatusFromHealth, type DeviceHealthRpcResult } from "@/lib/device-status";
+import { feedCommandRpcArgs, isFeedSchemaOutOfDate } from "@/lib/feeder-commands";
 import { computeDispenseAmount, mealSlotForDate } from "@/lib/feeding-logic";
 import { createClient } from "@/lib/supabase/server";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const requestId = request.headers.get("x-vercel-id");
+  console.log(JSON.stringify({
+    level: "info",
+    message: "feed command request started",
+    route: "/api/feed/manual",
+    requestId,
+  }));
+
   try {
     const supabase = await createClient();
     const pet = await getPet(supabase);
@@ -78,12 +88,15 @@ export async function POST() {
       latestReading?.tray_weight_g ?? 0,
     );
 
-    const { data: command, error: enqueueError } = await supabase.rpc("enqueue_feed_command", {
-      p_device_id: DEVICE_ID,
-      p_pet_id: pet.id,
-      p_target_g: dispenseAmountG,
-      p_meal_slot: mealSlotForDate(new Date()),
-    });
+    const { data: command, error: enqueueError } = await supabase.rpc(
+      "enqueue_feed_command",
+      feedCommandRpcArgs(
+        DEVICE_ID,
+        pet.id,
+        dispenseAmountG,
+        mealSlotForDate(new Date()),
+      ),
+    );
 
     if (enqueueError) {
       if (enqueueError.code === "54000") {
@@ -92,23 +105,53 @@ export async function POST() {
           { status: 429 },
         );
       }
-      console.error("[feed/manual] enqueue failed", {
-        device_id: DEVICE_ID,
-        code: enqueueError.code,
-        message: enqueueError.message,
-      });
+      const schemaOutOfDate = isFeedSchemaOutOfDate(enqueueError);
+      console.error(JSON.stringify({
+        level: "error",
+        message: "feed command enqueue failed",
+        route: "/api/feed/manual",
+        requestId,
+        deviceId: DEVICE_ID,
+        databaseCode: enqueueError.code,
+        errorCode: schemaOutOfDate ? "SCHEMA_OUT_OF_DATE" : "COMMAND_ENQUEUE_FAILED",
+        durationMs: Date.now() - startedAt,
+      }));
+
+      if (schemaOutOfDate) {
+        return NextResponse.json(
+          {
+            error: "ฐานข้อมูลเครื่องให้อาหารยังไม่ได้อัปเดต กรุณารัน migration ล่าสุด",
+            errorCode: "SCHEMA_OUT_OF_DATE",
+          },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         { error: "ไม่สามารถสร้างคำสั่งให้อาหารได้", errorCode: "COMMAND_ENQUEUE_FAILED" },
         { status: 503 },
       );
     }
 
+    console.log(JSON.stringify({
+      level: "info",
+      message: "feed command enqueued",
+      route: "/api/feed/manual",
+      requestId,
+      deviceId: DEVICE_ID,
+      commandId: command.id,
+      durationMs: Date.now() - startedAt,
+    }));
     return NextResponse.json({ dispenseAmountG, command, errorCode: null }, { status: 202 });
   } catch (error) {
-    console.error("[feed/manual] request failed", {
-      device_id: DEVICE_ID,
-      message: error instanceof Error ? error.message : "unknown error",
-    });
+    console.error(JSON.stringify({
+      level: "error",
+      message: "feed command request failed",
+      route: "/api/feed/manual",
+      requestId,
+      deviceId: DEVICE_ID,
+      error: error instanceof Error ? error.message : "unknown error",
+      durationMs: Date.now() - startedAt,
+    }));
     return NextResponse.json(
       { error: "ระบบให้อาหารขัดข้อง กรุณาลองใหม่", errorCode: "DATABASE_ERROR" },
       { status: 503 },

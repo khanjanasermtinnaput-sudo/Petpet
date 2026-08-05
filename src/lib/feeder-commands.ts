@@ -41,6 +41,7 @@ export type FeedErrorCode =
   | "DEVICE_NOT_FOUND"
   | "DEVICE_OFFLINE"
   | "DATABASE_ERROR"
+  | "SCHEMA_OUT_OF_DATE"
   | "COMMAND_ENQUEUE_FAILED"
   | "COMMAND_NOT_CLAIMED"
   | "COMMAND_EXECUTION_TIMEOUT"
@@ -51,6 +52,52 @@ export type FeedErrorCode =
   | "ABORTED"
   | "DEVICE_ERROR"
   | "RATE_LIMITED";
+
+export interface FeedCommandRpcArgs {
+  p_device_id: string;
+  p_pet_id: string;
+  p_target_g: number;
+  p_meal_slot: string;
+}
+
+export function feedCommandRpcArgs(
+  deviceId: string,
+  petId: string,
+  targetG: number,
+  mealSlot: string,
+): FeedCommandRpcArgs {
+  return {
+    p_device_id: deviceId,
+    p_pet_id: petId,
+    p_target_g: targetG,
+    p_meal_slot: mealSlot,
+  };
+}
+
+interface PostgrestErrorLike {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+}
+
+/** Detects a deployed API/database contract mismatch without exposing SQL details. */
+export function isFeedSchemaOutOfDate(error: PostgrestErrorLike): boolean {
+  if (["PGRST202", "PGRST204", "42703", "42883"].includes(error.code ?? "")) {
+    return true;
+  }
+
+  const context = [error.message, error.details, error.hint]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    context.includes("p_pet_id") ||
+    (context.includes("pet_id") &&
+      (context.includes("schema cache") || context.includes("column")))
+  );
+}
 
 export function feedOutcomeCode(outcome: FeedOutcome): string {
   if (outcome.status === "success") return "OK";
