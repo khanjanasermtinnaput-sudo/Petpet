@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getPet } from "@/lib/device";
+import { getPet } from "@/lib/active-pet";
 import type { FeedEvent } from "@/lib/types";
 import { DashboardClient } from "./DashboardClient";
 
@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     supabase
       .from("feed_events")
       .select("*")
-      .eq("device_id", pet.device_id)
+      .eq("pet_id", pet.id)
       .order("ts", { ascending: false })
       .limit(60),
   ]);

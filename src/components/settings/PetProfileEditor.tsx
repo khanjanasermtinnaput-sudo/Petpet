@@ -1,39 +1,65 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { NeuButton } from "@/components/neu/NeuButton";
 import { NeuCard } from "@/components/neu/NeuCard";
 import { NeuInput } from "@/components/neu/NeuInput";
 import { NeuSelect } from "@/components/neu/NeuSelect";
 import type { Pet } from "@/lib/types";
 
-export function PetProfileEditor({ pet, authenticated }: { pet: Pet; authenticated: boolean }) {
+export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
   const router = useRouter();
+  const [adding, setAdding] = useState(false);
   const [name, setName] = useState(pet.name);
   const [species, setSpecies] = useState(pet.species || "Dog");
   const [birthDate, setBirthDate] = useState(pet.birth_date ?? "");
   const [weightKg, setWeightKg] = useState(String(pet.weight_kg));
   const [saving, setSaving] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!authenticated) {
-    return (
-      <NeuCard>
-        <h2 className="text-lg font-bold text-neu-ink">ข้อมูลสัตว์เลี้ยง</h2>
-        <p className="mt-2 text-sm text-neu-ink-muted">
-          เข้าสู่ระบบก่อน หากต้องการเปลี่ยนชื่อหรือข้อมูลของน้อง
-        </p>
-        <Link
-          href="/login?next=/settings"
-          className="neu-raised-sm neu-focusable neu-press-active mt-5 inline-flex px-5 py-3 font-semibold text-neu-accent"
-        >
-          เข้าสู่ระบบเพื่อแก้ไขข้อมูล
-        </Link>
-      </NeuCard>
-    );
+  async function selectPet(petId: string) {
+    if (petId === pet.id) return;
+    setSwitching(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/pets/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ petId }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(body.error ?? "ไม่สามารถเลือกสัตว์เลี้ยงได้");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  function startAdding() {
+    setAdding(true);
+    setName("");
+    setSpecies("Dog");
+    setBirthDate("");
+    setWeightKg("");
+    setMessage(null);
+    setError(null);
+  }
+
+  function cancelAdding() {
+    setAdding(false);
+    setName(pet.name);
+    setSpecies(pet.species || "Dog");
+    setBirthDate(pet.birth_date ?? "");
+    setWeightKg(String(pet.weight_kg));
+    setError(null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -42,41 +68,71 @@ export function PetProfileEditor({ pet, authenticated }: { pet: Pet; authenticat
     setMessage(null);
     setError(null);
 
-    const response = await fetch("/api/pets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name.trim(),
-        species,
-        birthDate,
-        weightKg: Number(weightKg),
-      }),
-    });
-    const body = await response.json().catch(() => ({}));
-
-    setSaving(false);
-    if (!response.ok) {
-      setError(body.error ?? "บันทึกข้อมูลไม่สำเร็จ");
-      return;
+    try {
+      const response = await fetch("/api/pets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(adding ? {} : { petId: pet.id }),
+          name: name.trim(),
+          species,
+          birthDate,
+          weightKg: Number(weightKg),
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(body.error ?? "บันทึกข้อมูลไม่สำเร็จ");
+        return;
+      }
+      setMessage(adding ? "เพิ่มสัตว์เลี้ยงแล้ว" : "บันทึกข้อมูลเรียบร้อยแล้ว");
+      setAdding(false);
+      router.refresh();
+    } catch {
+      setError("เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setSaving(false);
     }
-
-    setMessage("บันทึกข้อมูลเรียบร้อยแล้ว");
-    router.refresh();
   }
 
   return (
     <NeuCard>
-      <h2 className="text-lg font-bold text-neu-ink">ข้อมูลสัตว์เลี้ยง</h2>
-      <p className="mt-2 text-sm text-neu-ink-muted">
-        เปลี่ยนข้อมูลที่ใช้ประกอบการวางแผนการให้อาหารได้ที่นี่
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-neu-ink">ข้อมูลสัตว์เลี้ยง</h2>
+          <p className="mt-1 text-sm text-neu-ink-muted">เลือก แก้ไข หรือเพิ่มข้อมูลสัตว์เลี้ยงได้ที่นี่</p>
+        </div>
+        {!adding && (
+          <NeuButton type="button" variant="accent" onClick={startAdding}>
+            เพิ่มสัตว์เลี้ยง
+          </NeuButton>
+        )}
+      </div>
+
+      {!adding && (
+        <div className="mt-5">
+          <NeuSelect
+            label="สัตว์เลี้ยงที่กำลังดูแล"
+            value={pet.id}
+            disabled={switching}
+            onChange={(event) => void selectPet(event.target.value)}
+          >
+            {pets.map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </NeuSelect>
+        </div>
+      )}
+
+      {adding && (
+        <div className="mt-5 flex items-center justify-between rounded-xl bg-neu-bg px-4 py-3 text-sm font-semibold text-neu-accent">
+          <span>เพิ่มสัตว์เลี้ยงตัวใหม่</span>
+          <button type="button" className="neu-focusable text-neu-ink-muted" onClick={cancelAdding}>ยกเลิก</button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
-        <NeuInput
-          label="ชื่อสัตว์เลี้ยง"
-          required
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
+        <NeuInput label="ชื่อสัตว์เลี้ยง" required value={name} onChange={(event) => setName(event.target.value)} />
         <NeuSelect label="ชนิดสัตว์เลี้ยง" value={species} onChange={(event) => setSpecies(event.target.value)}>
           <option value="Dog">สุนัข</option>
           <option value="Cat">แมว</option>
@@ -100,8 +156,8 @@ export function PetProfileEditor({ pet, authenticated }: { pet: Pet; authenticat
         />
         {error && <p role="alert" className="text-sm font-semibold text-neu-warning">{error}</p>}
         {message && <p role="status" className="text-sm font-semibold text-neu-success">{message}</p>}
-        <NeuButton type="submit" variant="accent" disabled={saving}>
-          {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+        <NeuButton type="submit" variant="accent" disabled={saving || switching}>
+          {saving ? "กำลังบันทึก..." : adding ? "เพิ่มสัตว์เลี้ยง" : "บันทึกข้อมูล"}
         </NeuButton>
       </form>
     </NeuCard>

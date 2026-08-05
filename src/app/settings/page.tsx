@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getPet } from "@/lib/device";
+import { getPet, getPets } from "@/lib/active-pet";
 import { NavRail } from "@/components/dashboard/NavRail";
 import { NeuThemeToggle } from "@/components/neu/NeuThemeToggle";
 import { PetProfileEditor } from "@/components/settings/PetProfileEditor";
@@ -15,13 +15,13 @@ export default async function SettingsPage() {
 
   if (!pet) redirect("/onboarding");
 
-  const [{ data: schedule }, { data: { user } }] = await Promise.all([
+  const [{ data: schedule }, pets] = await Promise.all([
     supabase
       .from("feeding_schedule")
       .select("*")
-      .eq("device_id", pet.device_id)
+      .eq("pet_id", pet.id)
       .order("time_of_day", { ascending: true }),
-    supabase.auth.getUser(),
+    getPets(supabase),
   ]);
 
   return (
@@ -31,7 +31,7 @@ export default async function SettingsPage() {
         <NeuThemeToggle />
       </header>
       <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6 sm:px-8">
-        <PetProfileEditor pet={pet} authenticated={Boolean(user)} />
+        <PetProfileEditor key={pet.id} pet={pet} pets={pets} />
         <section>
           <h2 className="mb-3 text-lg font-bold text-neu-ink">ตารางการให้อาหาร</h2>
           <ScheduleClient initialSchedule={(schedule ?? []) as FeedingSchedule[]} />

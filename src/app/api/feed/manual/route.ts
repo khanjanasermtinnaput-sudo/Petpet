@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { DEVICE_ID, getPet } from "@/lib/device";
+import { DEVICE_ID } from "@/lib/device";
+import { getPet } from "@/lib/active-pet";
 import { deviceStatusFromHealth, type DeviceHealthRpcResult } from "@/lib/device-status";
 import { computeDispenseAmount, mealSlotForDate } from "@/lib/feeding-logic";
 import { createClient } from "@/lib/supabase/server";
@@ -79,6 +80,7 @@ export async function POST() {
 
     const { data: command, error: enqueueError } = await supabase.rpc("enqueue_feed_command", {
       p_device_id: DEVICE_ID,
+      p_pet_id: pet.id,
       p_target_g: dispenseAmountG,
       p_meal_slot: mealSlotForDate(new Date()),
     });

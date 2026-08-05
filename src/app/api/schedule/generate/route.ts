@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getPet } from "@/lib/device";
+import { getPet } from "@/lib/active-pet";
 import type { FeedingSchedule, MealSlot } from "@/lib/types";
 
 const MEAL_SLOTS: readonly MealSlot[] = ["breakfast", "lunch", "dinner"];
@@ -112,13 +112,14 @@ export async function POST() {
   const { error: upsertError } = await supabase.from("feeding_schedule").upsert(
     validMeals.map((m) => ({
       device_id: pet.device_id,
+      pet_id: pet.id,
       meal_slot: m.meal_slot,
       time_of_day: m.time_of_day,
       target_g: m.target_g,
       source: "ai",
       updated_at: new Date().toISOString(),
     })),
-    { onConflict: "device_id,meal_slot" },
+    { onConflict: "pet_id,meal_slot" },
   );
 
   if (upsertError) {
@@ -131,7 +132,7 @@ export async function POST() {
   const { data: schedule, error: fetchError } = await supabase
     .from("feeding_schedule")
     .select("*")
-    .eq("device_id", pet.device_id)
+    .eq("pet_id", pet.id)
     .order("time_of_day", { ascending: true });
 
   if (fetchError) {

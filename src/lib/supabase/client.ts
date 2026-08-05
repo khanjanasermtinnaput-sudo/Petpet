@@ -1,17 +1,16 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 
 export function createClient() {
-  return createBrowserClient<Database>(
+  return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
       },
-      cookieOptions: { maxAge: 60 * 60 * 24 * 30 },
     },
   );
 }

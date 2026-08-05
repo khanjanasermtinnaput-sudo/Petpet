@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getPet } from "@/lib/device";
+import { getPet } from "@/lib/active-pet";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   const { data: recentFeedEvents } = await supabase
     .from("feed_events")
     .select("meal_slot, target_g, actual_eaten_g, ts")
-    .eq("device_id", pet.device_id)
+    .eq("pet_id", pet.id)
     .gte("ts", since)
     .order("ts", { ascending: true });
 

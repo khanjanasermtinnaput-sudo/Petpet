@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getPet } from "@/lib/device";
+import { getPet } from "@/lib/active-pet";
 import type { FeedingSchedule } from "@/lib/types";
 
 export async function GET() {
@@ -14,7 +14,7 @@ export async function GET() {
   const { data: schedule, error } = await supabase
     .from("feeding_schedule")
     .select("*")
-    .eq("device_id", pet.device_id)
+    .eq("pet_id", pet.id)
     .order("time_of_day", { ascending: true });
 
   if (error) {

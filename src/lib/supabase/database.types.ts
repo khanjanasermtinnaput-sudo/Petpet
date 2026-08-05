@@ -69,6 +69,7 @@ export type Database = {
           device_id: string;
           id: string;
           meal_slot: string;
+          pet_id: string;
           target_g: number;
           ts: string;
         };
@@ -77,6 +78,7 @@ export type Database = {
           device_id: string;
           id?: string;
           meal_slot: string;
+          pet_id: string;
           target_g: number;
           ts?: string;
         };
@@ -85,6 +87,7 @@ export type Database = {
           device_id?: string;
           id?: string;
           meal_slot?: string;
+          pet_id?: string;
           target_g?: number;
           ts?: string;
         };
@@ -103,6 +106,7 @@ export type Database = {
           finished_at: string | null;
           id: string;
           meal_slot: string;
+          pet_id: string;
           retry_of: string | null;
           source: string;
           status: string;
@@ -123,6 +127,7 @@ export type Database = {
           finished_at?: string | null;
           id?: string;
           meal_slot: string;
+          pet_id: string;
           retry_of?: string | null;
           source?: string;
           status?: string;
@@ -143,6 +148,7 @@ export type Database = {
           finished_at?: string | null;
           id?: string;
           meal_slot?: string;
+          pet_id?: string;
           retry_of?: string | null;
           source?: string;
           status?: string;
@@ -182,6 +188,7 @@ export type Database = {
           device_id: string;
           id: string;
           meal_slot: string;
+          pet_id: string;
           source: string;
           target_g: number;
           time_of_day: string;
@@ -191,6 +198,7 @@ export type Database = {
           device_id: string;
           id?: string;
           meal_slot: string;
+          pet_id: string;
           source?: string;
           target_g: number;
           time_of_day: string;
@@ -200,6 +208,7 @@ export type Database = {
           device_id?: string;
           id?: string;
           meal_slot?: string;
+          pet_id?: string;
           source?: string;
           target_g?: number;
           time_of_day?: string;
@@ -296,6 +305,7 @@ export type Database = {
         Args: {
           p_device_id: string;
           p_meal_slot: string;
+          p_pet_id: string;
           p_retry_of?: string;
           p_source?: string;
           p_target_g: number;

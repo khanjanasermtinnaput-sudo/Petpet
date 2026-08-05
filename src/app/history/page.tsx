@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getPet } from "@/lib/device";
+import { getPet } from "@/lib/active-pet";
 import type { FeedEvent } from "@/lib/types";
 import { NavRail } from "@/components/dashboard/NavRail";
 import { NeuThemeToggle } from "@/components/neu/NeuThemeToggle";
@@ -56,7 +56,7 @@ export default async function HistoryPage() {
   const { data: events } = await supabase
     .from("feed_events")
     .select("*")
-    .eq("device_id", pet.device_id)
+    .eq("pet_id", pet.id)
     .gte("ts", sevenDaysAgoIso())
     .order("ts", { ascending: true });
 
