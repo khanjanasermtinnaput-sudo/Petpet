@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  feedCommandRpcArgs,
   feedOutcomeCode,
   feedResultMessage,
   feedTimeoutCode,
   feedTimeoutMessage,
+  isFeedSchemaOutOfDate,
   isTerminalStatus,
   type FeedOutcome,
 } from "./feeder-commands";
@@ -103,5 +105,32 @@ describe("feed error codes", () => {
     expect(feedOutcomeCode(outcome({ status: "failed", error: "jam" }))).toBe("JAM");
     expect(feedTimeoutCode("pickup")).toBe("COMMAND_NOT_CLAIMED");
     expect(feedTimeoutCode("execute")).toBe("COMMAND_EXECUTION_TIMEOUT");
+  });
+});
+
+describe("feed command RPC contract", () => {
+  it("always attributes a queued command to the selected pet", () => {
+    expect(feedCommandRpcArgs("PETFEEDER-001", "pet-123", 42, "lunch")).toEqual({
+      p_device_id: "PETFEEDER-001",
+      p_pet_id: "pet-123",
+      p_target_g: 42,
+      p_meal_slot: "lunch",
+    });
+  });
+
+  it("recognises PostgREST function and column schema drift", () => {
+    expect(isFeedSchemaOutOfDate({ code: "PGRST202" })).toBe(true);
+    expect(isFeedSchemaOutOfDate({ code: "42703" })).toBe(true);
+    expect(
+      isFeedSchemaOutOfDate({
+        code: "PGRST200",
+        message: "Could not find p_pet_id in the schema cache",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not hide ordinary database failures as migration problems", () => {
+    expect(isFeedSchemaOutOfDate({ code: "42501", message: "permission denied" })).toBe(false);
+    expect(isFeedSchemaOutOfDate({ code: "54000", message: "rate limit" })).toBe(false);
   });
 });
