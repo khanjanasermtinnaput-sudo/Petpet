@@ -46,3 +46,5 @@ supabase/provision_*.sql
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
