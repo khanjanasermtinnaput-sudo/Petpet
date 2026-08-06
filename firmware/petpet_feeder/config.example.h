@@ -32,7 +32,7 @@
 
 // Reported to device_status.firmware_version so you can tell which feeder is
 // running what without unplugging it.
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.0.1"
 
 // ------------------------------------------------------------------- servo ---
 // D5. Avoid GPIO0/2/15: they are boot-strapping pins, and a servo signal on

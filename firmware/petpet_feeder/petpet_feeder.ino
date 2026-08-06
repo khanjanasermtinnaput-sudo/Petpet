@@ -143,6 +143,14 @@ static float trayWeightG() {
 // HTTP
 // --------------------------------------------------------------------------
 
+static bool jsonParsed(const char* fn, DeserializationError err) {
+  if (!err) return true;
+
+  Serial.printf("[http] %s: bad json: %s size=%d\n",
+                fn, err.c_str(), http.getSize());
+  return false;
+}
+
 // Returns the HTTP status code, or a negative HTTPClient error. On 200 the
 // response body is parsed into `out` when `out` is non-null.
 static int postRpc(const char* fn, const char* body, JsonDocument* out) {
@@ -165,14 +173,25 @@ static int postRpc(const char* fn, const char* body, JsonDocument* out) {
   int code = http.POST((uint8_t*)body, strlen(body));
 
   if (code == HTTP_CODE_OK && out != nullptr) {
-    // Parsed straight off the socket. Materialising a String first would
-    // fragment a heap that only has ~40 KB free after the WiFi stack.
-    DeserializationError err = deserializeJson(*out, http.getStream());
-    if (err) {
-      Serial.printf("[http] %s: bad json: %s\n", fn, err.c_str());
+    if (http.getSize() < 0) {
+      // Supabase/PostgREST uses chunked transfer encoding for command rows.
+      // getStream() exposes the raw chunk framing, which ArduinoJson rejects
+      // as InvalidInput. getString() goes through HTTPClient's chunk decoder.
+      // Idle polls still take the fixed-length stream path below, avoiding a
+      // heap allocation on the steady-state 1 Hz request.
+      String payload = http.getString();
+      if (!jsonParsed(fn, deserializeJson(*out, payload))) {
+        http.end();
+        return -1001;
+      }
+    } else if (!jsonParsed(fn, deserializeJson(*out, http.getStream()))) {
       http.end();
       return -1001;
     }
+  } else if (code == HTTP_CODE_OK) {
+    // A successful RPC can still return a row. Consume it before reusing the
+    // keep-alive socket, otherwise its bytes corrupt the next response.
+    http.getString();
   } else if (code != HTTP_CODE_OK) {
     // 403 means the secret is wrong or the device_id is not registered; 404
     // with a PGRST202 body means the schema cache is stale. Both are
