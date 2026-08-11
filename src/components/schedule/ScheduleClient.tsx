@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { NeuButton } from "@/components/neu/NeuButton";
 import { NeuCard } from "@/components/neu/NeuCard";
+import { NeuIcon } from "@/components/neu/NeuIcon";
 import type { FeedingSchedule, MealSlot } from "@/lib/types";
 
 const MEAL_SLOT_LABELS_TH: Record<MealSlot, string> = {
@@ -229,7 +230,7 @@ export function ScheduleClient({ initialSchedule }: { initialSchedule: FeedingSc
                     }`}
                     aria-hidden
                   >
-                    {done ? "✓" : "⏳"}
+                    <NeuIcon name={done ? "check" : "pending"} className="h-3.5 w-3.5" />
                   </span>
                 </div>
               );

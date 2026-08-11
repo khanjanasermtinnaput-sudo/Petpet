@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { NeuIconButton } from "@/components/neu/NeuIconButton";
+import { NeuIcon } from "@/components/neu/NeuIcon";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -36,9 +37,9 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
         type="submit"
         aria-label="ส่งข้อความ"
         disabled={disabled || !value.trim()}
-        className="h-12 w-12 shrink-0 text-lg text-neu-accent"
+        className="h-12 w-12 shrink-0 text-neu-accent"
       >
-        ➤
+        <NeuIcon name="send" className="h-5 w-5" />
       </NeuIconButton>
     </form>
   );

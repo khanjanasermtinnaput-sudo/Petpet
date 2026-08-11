@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NeuIcon, type NeuIconName } from "@/components/neu/NeuIcon";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "หน้าหลัก", icon: "🏠" },
-  { href: "/history", label: "ประวัติ", icon: "📊" },
-  { href: "/vet", label: "VET AI", icon: "💬" },
-  { href: "/settings", label: "ตั้งค่า", icon: "⚙️" },
+  { href: "/dashboard", label: "หน้าหลัก", icon: "home" },
+  { href: "/history", label: "ประวัติ", icon: "history" },
+  { href: "/vet", label: "VET AI", icon: "vet" },
+  { href: "/settings", label: "ตั้งค่า", icon: "settings" },
 ] as const;
 
 export function NavRail() {
@@ -30,9 +31,7 @@ export function NavRail() {
                 : "text-neu-ink-muted"
             }`}
           >
-            <span className="text-lg" aria-hidden>
-              {item.icon}
-            </span>
+            <NeuIcon name={item.icon as NeuIconName} className="h-5 w-5" />
             {item.label}
           </Link>
         );

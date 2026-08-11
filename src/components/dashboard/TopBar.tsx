@@ -9,7 +9,7 @@ export function TopBar({ petName, uvOn }: { petName: string; uvOn: boolean }) {
           className="neu-raised-round flex h-11 w-11 items-center justify-center text-xl"
           aria-hidden
         >
-          🐾
+          <span className="text-base font-black text-neu-accent">P</span>
         </div>
         <span className="text-lg font-bold text-neu-ink">{petName}</span>
       </div>

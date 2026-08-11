@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { NeuIconButton } from "@/components/neu/NeuIconButton";
+import { NeuIcon } from "@/components/neu/NeuIcon";
 
 export function ManualFeedButton({
   onFeed,
@@ -32,7 +33,7 @@ export function ManualFeedButton({
         pressed={pressed}
         disabled={loading || disabled}
         onClick={handleClick}
-        className="h-16 w-16 text-2xl text-neu-accent"
+        className="h-16 w-16 text-neu-accent"
       >
         {loading ? (
           <span
@@ -40,7 +41,7 @@ export function ManualFeedButton({
             aria-hidden
           />
         ) : (
-          "🍽️"
+          <NeuIcon name="feed" className="h-7 w-7" />
         )}
       </NeuIconButton>
     </div>

@@ -48,7 +48,7 @@ export default function OnboardingPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <NeuCard className="w-full max-w-sm">
-        <h1 className="mb-1 text-center text-2xl font-bold text-neu-ink">Petpet 🐾</h1>
+        <h1 className="mb-1 text-center text-2xl font-bold text-neu-ink">Petpet</h1>
         <p className="mb-6 text-center text-sm text-neu-ink-muted">
           กรอกข้อมูลน้องสัตว์เลี้ยงของคุณ
         </p>
