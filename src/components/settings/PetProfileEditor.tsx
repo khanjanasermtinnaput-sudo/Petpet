@@ -6,6 +6,7 @@ import { NeuButton } from "@/components/neu/NeuButton";
 import { NeuCard } from "@/components/neu/NeuCard";
 import { NeuInput } from "@/components/neu/NeuInput";
 import { NeuSelect } from "@/components/neu/NeuSelect";
+import { BreedCombobox } from "@/components/pets/BreedCombobox";
 import type { Pet } from "@/lib/types";
 
 export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
@@ -13,6 +14,7 @@ export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState(pet.name);
   const [species, setSpecies] = useState(pet.species || "Dog");
+  const [breed, setBreed] = useState<string | null>(pet.breed);
   const [birthDate, setBirthDate] = useState(pet.birth_date ?? "");
   const [weightKg, setWeightKg] = useState(String(pet.weight_kg));
   const [saving, setSaving] = useState(false);
@@ -47,6 +49,7 @@ export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
     setAdding(true);
     setName("");
     setSpecies("Dog");
+    setBreed(null);
     setBirthDate("");
     setWeightKg("");
     setMessage(null);
@@ -57,6 +60,7 @@ export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
     setAdding(false);
     setName(pet.name);
     setSpecies(pet.species || "Dog");
+    setBreed(pet.breed);
     setBirthDate(pet.birth_date ?? "");
     setWeightKg(String(pet.weight_kg));
     setError(null);
@@ -76,6 +80,7 @@ export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
           ...(adding ? {} : { petId: pet.id }),
           name: name.trim(),
           species,
+          breed,
           birthDate,
           weightKg: Number(weightKg),
         }),
@@ -133,10 +138,16 @@ export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
 
       <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
         <NeuInput label="ชื่อสัตว์เลี้ยง" required value={name} onChange={(event) => setName(event.target.value)} />
-        <NeuSelect label="ชนิดสัตว์เลี้ยง" value={species} onChange={(event) => setSpecies(event.target.value)}>
+        <NeuSelect label="ชนิดสัตว์เลี้ยง" value={species} onChange={(event) => { setSpecies(event.target.value); setBreed(null); }}>
           <option value="Dog">สุนัข</option>
           <option value="Cat">แมว</option>
         </NeuSelect>
+        <BreedCombobox
+          label="สายพันธุ์"
+          species={species === "Cat" ? "Cat" : "Dog"}
+          value={breed}
+          onChange={setBreed}
+        />
         <NeuInput
           label="วันเดือนปีเกิด"
           type="date"

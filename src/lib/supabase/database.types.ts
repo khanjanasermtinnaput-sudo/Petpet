@@ -12,6 +12,60 @@ export type Database = {
   };
   public: {
     Tables: {
+      chat_conversations: {
+        Row: {
+          created_at: string;
+          id: string;
+          pet_id: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          pet_id: string;
+          title: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          pet_id?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: {
+          client_message_id: string | null;
+          content: string;
+          conversation_id: string;
+          created_at: string;
+          id: string;
+          role: string;
+        };
+        Insert: {
+          client_message_id?: string | null;
+          content: string;
+          conversation_id: string;
+          created_at?: string;
+          id?: string;
+          role: string;
+        };
+        Update: {
+          client_message_id?: string | null;
+          content?: string;
+          conversation_id?: string;
+          created_at?: string;
+          id?: string;
+          role?: string;
+        };
+        Relationships: [];
+      };
       device_status: {
         Row: {
           device_id: string;
@@ -221,6 +275,7 @@ export type Database = {
           age_months: number;
           age_years: number;
           birth_date: string | null;
+          breed: string | null;
           created_at: string;
           daily_target_g: number;
           device_id: string;
@@ -233,6 +288,7 @@ export type Database = {
           age_months?: number;
           age_years?: number;
           birth_date?: string | null;
+          breed?: string | null;
           created_at?: string;
           daily_target_g?: number;
           device_id: string;
@@ -245,6 +301,7 @@ export type Database = {
           age_months?: number;
           age_years?: number;
           birth_date?: string | null;
+          breed?: string | null;
           created_at?: string;
           daily_target_g?: number;
           device_id?: string;

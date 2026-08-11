@@ -11,7 +11,7 @@ export function LowEatingAlert({ onDismiss }: { onDismiss: () => void }) {
           href="/vet"
           className="neu-focusable mt-1 inline-block rounded text-sm font-semibold text-neu-accent underline underline-offset-2"
         >
-          ถาม AI สัตวแพทย์
+          ถาม VET AI
         </Link>
       </div>
       <button

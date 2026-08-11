@@ -6,11 +6,13 @@ import { NeuButton } from "@/components/neu/NeuButton";
 import { NeuCard } from "@/components/neu/NeuCard";
 import { NeuInput } from "@/components/neu/NeuInput";
 import { NeuSelect } from "@/components/neu/NeuSelect";
+import { BreedCombobox } from "@/components/pets/BreedCombobox";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [species, setSpecies] = useState("Dog");
+  const [breed, setBreed] = useState<string | null>(null);
   const [birthDate, setBirthDate] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,12 +21,16 @@ export default function OnboardingPage() {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (!breed) {
+      setError("กรุณาเลือกสายพันธุ์");
+      return;
+    }
     setLoading(true);
 
     const res = await fetch("/api/pets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, species, birthDate, weightKg: Number(weightKg) }),
+      body: JSON.stringify({ name, species, breed, birthDate, weightKg: Number(weightKg) }),
     });
 
     setLoading(false);
@@ -56,11 +62,18 @@ export default function OnboardingPage() {
           <NeuSelect
             label="ชนิดสัตว์เลี้ยง"
             value={species}
-            onChange={(e) => setSpecies(e.target.value)}
+            onChange={(e) => { setSpecies(e.target.value); setBreed(null); }}
           >
             <option value="Dog">หมา</option>
             <option value="Cat">แมว</option>
           </NeuSelect>
+          <BreedCombobox
+            label="สายพันธุ์"
+            species={species === "Cat" ? "Cat" : "Dog"}
+            value={breed}
+            onChange={setBreed}
+            required
+          />
           <NeuInput
             label="วันเดือนปีเกิด"
             type="date"

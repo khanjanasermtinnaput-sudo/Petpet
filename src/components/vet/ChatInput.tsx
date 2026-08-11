@@ -22,7 +22,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
   return (
     <form onSubmit={handleSubmit} className="flex items-center gap-3">
       <label htmlFor="vet-chat-input" className="sr-only">
-        พิมพ์ข้อความถึง AI สัตวแพทย์
+        พิมพ์ข้อความถึง VET AI
       </label>
       <input
         id="vet-chat-input"

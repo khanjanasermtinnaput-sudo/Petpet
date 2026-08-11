@@ -126,7 +126,7 @@ export function ScheduleClient({ initialSchedule }: { initialSchedule: FeedingSc
     <div className="flex flex-col gap-4">
       {schedule.length === 0 ? (
         <NeuCard className="text-center text-sm text-neu-ink-muted">
-          ยังไม่มีตารางการให้อาหาร — ให้ AI สัตวแพทย์ช่วยวางแผนได้เลย
+          ยังไม่มีตารางการให้อาหาร — ให้ VET AI ช่วยวางแผนได้เลย
         </NeuCard>
       ) : !now ? (
         <NeuCard className="h-[420px] animate-pulse" aria-hidden />
@@ -255,7 +255,7 @@ export function ScheduleClient({ initialSchedule }: { initialSchedule: FeedingSc
       </NeuButton>
 
       <p className="text-center text-xs text-neu-ink-muted">
-        คำแนะนำจาก AI เป็นข้อมูลทั่วไปเท่านั้น ไม่ใช่คำวินิจฉัยจากสัตวแพทย์ตัวจริง
+        คำแนะนำจาก VET AI เป็นข้อมูลทั่วไปเท่านั้น ไม่ใช่คำวินิจฉัยจากสัตวแพทย์ตัวจริง
       </p>
     </div>
   );

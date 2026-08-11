@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getPet } from "@/lib/active-pet";
+import { buildSchedulePrompt } from "@/lib/schedule-prompt";
 import type { FeedingSchedule, MealSlot } from "@/lib/types";
 
 const MEAL_SLOTS: readonly MealSlot[] = ["breakfast", "lunch", "dinner"];
@@ -37,17 +38,6 @@ const SCHEDULE_SCHEMA = {
   additionalProperties: false,
 };
 
-function buildPrompt(pet: { species: string; weight_kg: number; age_years: number; age_months: number }): string {
-  return `คุณคือ AI สัตวแพทย์ผู้ช่วยวางแผนตารางการให้อาหารสัตว์เลี้ยง
-
-ข้อมูลสัตว์เลี้ยง:
-- ชนิด: ${pet.species === "Cat" ? "แมว" : pet.species === "Dog" ? "หมา" : pet.species}
-- น้ำหนัก: ${pet.weight_kg} กก.
-- อายุ: ${pet.age_years} ปี ${pet.age_months} เดือน
-
-จงวางแผนตารางการให้อาหาร 3 มื้อต่อวัน (เช้า กลางวัน เย็น) โดยใช้หลักโภชนาการสัตว์เลี้ยงทั่วไปตามชนิดและน้ำหนักของสัตว์ กำหนดเวลาที่เหมาะสมสำหรับแต่ละมื้อ และปริมาณอาหารเป็นกรัมต่อมื้อที่เหมาะสมต่อสุขภาพ`;
-}
-
 export async function POST() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -79,7 +69,7 @@ export async function POST() {
         responseMimeType: "application/json",
         responseSchema: SCHEDULE_SCHEMA,
       },
-      contents: [{ role: "user", parts: [{ text: buildPrompt(pet) }] }],
+      contents: [{ role: "user", parts: [{ text: buildSchedulePrompt(pet) }] }],
     });
 
     if (!response.text) throw new Error("no text in response");

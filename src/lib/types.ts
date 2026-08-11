@@ -1,6 +1,10 @@
 import type { Tables } from "./supabase/database.types";
 
 export type Pet = Tables<"pets">;
+export type ChatConversation = Tables<"chat_conversations">;
+export type ChatMessage = Omit<Tables<"chat_messages">, "role"> & {
+  role: "user" | "assistant";
+};
 export type FeederReading = Tables<"feeder_readings">;
 export type DeviceStatus = Tables<"device_status">;
 
