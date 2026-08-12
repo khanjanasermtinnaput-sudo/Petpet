@@ -13,42 +13,74 @@ export type StructuredGenerationRequest = {
 
 export class AiProviderConfigurationError extends Error {}
 
-/** Each provider's env var accepts a comma-separated list — a single value with no comma keeps working exactly as before. */
-function parseKeys(envValue: string | undefined): string[] {
-  return (envValue ?? "").split(",").map((key) => key.trim()).filter(Boolean);
+/** Shared comma-separated-list parser for both API keys and model names. */
+function splitCommaList(envValue: string | undefined): string[] {
+  return (envValue ?? "").split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 function geminiKeys(): string[] {
-  const keys = parseKeys(process.env.GEMINI_API_KEY);
+  const keys = splitCommaList(process.env.GEMINI_API_KEY);
   if (keys.length === 0) throw new AiProviderConfigurationError("GEMINI_API_KEY is not configured");
   return keys;
 }
 
 function llamaKeys(): string[] {
-  const keys = parseKeys(process.env.LLAMA_API_KEY);
+  const keys = splitCommaList(process.env.LLAMA_API_KEY);
   if (keys.length === 0) throw new AiProviderConfigurationError("LLAMA_API_KEY is not configured");
   return keys;
 }
 
 function openRouterKeys(): string[] {
-  const keys = parseKeys(process.env.OPENROUTER_API_KEY);
+  const keys = splitCommaList(process.env.OPENROUTER_API_KEY);
   if (keys.length === 0) throw new AiProviderConfigurationError("OPENROUTER_API_KEY is not configured");
   return keys;
 }
 
-// OpenRouter's free-tier catalog shifts over time — check openrouter.ai/models
-// for what's currently free if this default ever stops resolving, or set
-// OPENROUTER_MODEL to pin a specific model explicitly. Deliberately not a
-// "reasoning" model (e.g. gpt-oss/nemotron-nano's free tiers): those stream
-// their answer into a separate `reasoning` field and can leave `content`
-// empty for a while (or entirely, if the token budget runs out first) —
-// verified live against gemma here, so this default is one that populates
-// `content` directly.
-const DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
+// Gemini's rate limit is scoped per Google Cloud project *and* per model
+// (its 429 body names the quota "GenerateRequestsPerDayPerProjectPerModel-
+// FreeTier"). Two keys from the same project share one model's quota, so
+// trying a different model is often the only thing that actually helps —
+// GEMINI_MODEL can override this list; all three defaults support the
+// googleSearch grounding tool already in use below.
+const DEFAULT_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+
+function geminiModels(): string[] {
+  const models = splitCommaList(process.env.GEMINI_MODEL);
+  return models.length > 0 ? models : DEFAULT_GEMINI_MODELS;
+}
+
+// OpenRouter's free-tier catalog shifts over time and different free models
+// on the shared pool go up/down independently — check openrouter.ai/models
+// for what's currently free, or set OPENROUTER_MODEL (comma-separated for
+// more than one). Deliberately not a "reasoning" model (e.g. gpt-oss/
+// nemotron-nano's free tiers): those stream their answer into a separate
+// `reasoning` field and can leave `content` empty for a while (or entirely,
+// if the token budget runs out first) — verified live against gemma here,
+// so this default is one that populates `content` directly.
+const DEFAULT_OPENROUTER_MODELS = ["google/gemma-4-31b-it:free"];
 const OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-function resolveOpenRouterModel(): string {
-  return process.env.OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
+function openRouterModels(): string[] {
+  const models = splitCommaList(process.env.OPENROUTER_MODEL);
+  return models.length > 0 ? models : DEFAULT_OPENROUTER_MODELS;
+}
+
+interface KeyModelAttempt {
+  key: string;
+  model: string;
+}
+
+/** Every (key, model) combination for a provider, key-major: all models for key 1 before moving to key 2 — same-project keys share a model's quota, so cycling models on the *same* key is the more likely fix. */
+function geminiAttempts(): KeyModelAttempt[] {
+  const keys = geminiKeys();
+  const models = geminiModels();
+  return keys.flatMap((key) => models.map((model) => ({ key, model })));
+}
+
+function openRouterAttempts(): KeyModelAttempt[] {
+  const keys = openRouterKeys();
+  const models = openRouterModels();
+  return keys.flatMap((key) => models.map((model) => ({ key, model })));
 }
 
 /**
@@ -66,18 +98,18 @@ function isRateLimitError(error: unknown): boolean {
 }
 
 /**
- * Tries each key in order for a non-streaming call. Any non-rate-limit error
- * aborts immediately (no point trying another key for a bad request or a
- * server error); only once every key has failed with a rate limit does this
- * throw that last error, so callers can keep using
- * `if (!isRateLimitError(error)) throw error;` to decide whether to fall
- * through to the next provider.
+ * Tries each item (a key, or a key+model pair) in order for a non-streaming
+ * call. Any non-rate-limit error aborts immediately (no point trying another
+ * item for a bad request or a server error); only once every item has failed
+ * with a rate limit does this throw that last error, so callers can keep
+ * using `if (!isRateLimitError(error)) throw error;` to decide whether to
+ * fall through to the next provider.
  */
-async function tryWithKeyRotation<T>(keys: string[], attempt: (apiKey: string) => Promise<T>): Promise<T> {
+async function tryInSequence<TItem, TResult>(items: TItem[], attempt: (item: TItem) => Promise<TResult>): Promise<TResult> {
   let lastError: unknown;
-  for (const key of keys) {
+  for (const item of items) {
     try {
-      return await attempt(key);
+      return await attempt(item);
     } catch (error) {
       if (!isRateLimitError(error)) throw error;
       lastError = error;
@@ -87,21 +119,20 @@ async function tryWithKeyRotation<T>(keys: string[], attempt: (apiKey: string) =
 }
 
 /**
- * Streaming counterpart of tryWithKeyRotation. A key is only abandoned for
- * the next one if it fails with a rate limit before yielding any chunk —
- * once text has reached the caller it is never retried under a different
- * key, mirroring the existing emittedText guard at the Gemini -> Llama
- * boundary.
+ * Streaming counterpart of tryInSequence. An item is only abandoned for the
+ * next one if it fails with a rate limit before yielding any chunk — once
+ * text has reached the caller it is never retried under a different item,
+ * mirroring the existing emittedText guard at the Gemini -> Llama boundary.
  */
-async function* tryWithKeyRotationStream(
-  keys: string[],
-  attempt: (apiKey: string) => AsyncGenerator<string>,
+async function* tryInSequenceStream<TItem>(
+  items: TItem[],
+  attempt: (item: TItem) => AsyncGenerator<string>,
 ): AsyncGenerator<string> {
   let lastError: unknown;
-  for (const key of keys) {
+  for (const item of items) {
     let emittedText = false;
     try {
-      for await (const chunk of attempt(key)) {
+      for await (const chunk of attempt(item)) {
         emittedText = true;
         yield chunk;
       }
@@ -136,10 +167,10 @@ async function resolveLlamaModel(client: LlamaAPIClient): Promise<string> {
   return model;
 }
 
-async function callGeminiSchedule(apiKey: string, prompt: string, schema: unknown): Promise<string> {
+async function callGeminiSchedule(apiKey: string, model: string, prompt: string, schema: unknown): Promise<string> {
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model,
     config: {
       maxOutputTokens: 1024,
       thinkingConfig: { thinkingBudget: 0 },
@@ -169,7 +200,7 @@ async function callLlamaSchedule(apiKey: string, prompt: string, schema: unknown
   return text;
 }
 
-async function callOpenRouterSchedule(apiKey: string, prompt: string, schema: unknown): Promise<string> {
+async function callOpenRouterSchedule(apiKey: string, model: string, prompt: string, schema: unknown): Promise<string> {
   const response = await fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
     method: "POST",
     headers: {
@@ -177,7 +208,7 @@ async function callOpenRouterSchedule(apiKey: string, prompt: string, schema: un
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: resolveOpenRouterModel(),
+      model,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 1024,
       temperature: 0,
@@ -196,22 +227,23 @@ async function callOpenRouterSchedule(apiKey: string, prompt: string, schema: un
 
 /**
  * Generates the schedule through Gemini first (rotating through every
- * configured Gemini key on a 429 before giving up on Gemini), falling
- * through to Llama and then OpenRouter — each of which likewise rotates
- * through its own configured keys — only once the provider before it is
- * fully exhausted (every key rate-limited for Gemini; any failure at all,
- * including a missing key, for Llama and OpenRouter). All callers still
- * validate the returned JSON regardless of which provider produced it.
+ * configured Gemini key × model combination on a 429 before giving up on
+ * Gemini), falling through to Llama and then OpenRouter — each of which
+ * likewise rotates through its own configured keys (and, for OpenRouter,
+ * models too) — only once the provider before it is fully exhausted (every
+ * key/model rate-limited for Gemini; any failure at all, including a
+ * missing key, for Llama and OpenRouter). All callers still validate the
+ * returned JSON regardless of which provider produced it.
  */
 export async function generateScheduleText({ prompt, schema }: StructuredGenerationRequest): Promise<string> {
   try {
-    return await tryWithKeyRotation(geminiKeys(), (key) => callGeminiSchedule(key, prompt, schema));
+    return await tryInSequence(geminiAttempts(), ({ key, model }) => callGeminiSchedule(key, model, prompt, schema));
   } catch (error) {
     if (!isRateLimitError(error)) throw error;
     try {
-      return await tryWithKeyRotation(llamaKeys(), (key) => callLlamaSchedule(key, prompt, schema));
+      return await tryInSequence(llamaKeys(), (key) => callLlamaSchedule(key, prompt, schema));
     } catch {
-      return await tryWithKeyRotation(openRouterKeys(), (key) => callOpenRouterSchedule(key, prompt, schema));
+      return await tryInSequence(openRouterAttempts(), ({ key, model }) => callOpenRouterSchedule(key, model, prompt, schema));
     }
   }
 }
@@ -221,7 +253,7 @@ export async function generateScheduleText({ prompt, schema }: StructuredGenerat
  * `data: {...}`, terminated by a literal `data: [DONE]` line. No SDK needed
  * for this shape, just a fetch + manual line-buffered parse.
  */
-async function* streamOpenRouterOnce(apiKey: string, systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
+async function* streamOpenRouterOnce(apiKey: string, model: string, systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
   const response = await fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
     method: "POST",
     headers: {
@@ -229,7 +261,7 @@ async function* streamOpenRouterOnce(apiKey: string, systemInstruction: string, 
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: resolveOpenRouterModel(),
+      model,
       messages: [
         { role: "system", content: systemInstruction },
         ...history.map((turn) => ({ role: turn.role, content: turn.content })),
@@ -268,9 +300,9 @@ async function* streamOpenRouterOnce(apiKey: string, systemInstruction: string, 
   }
 }
 
-/** Rotates through every configured OpenRouter key; this is the last resort, so a failure here propagates to the caller. */
+/** Rotates through every configured OpenRouter key × model combination; this is the last resort, so a failure here propagates to the caller. */
 async function* streamOpenRouterVetReply(systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
-  yield* tryWithKeyRotationStream(openRouterKeys(), (key) => streamOpenRouterOnce(key, systemInstruction, history));
+  yield* tryInSequenceStream(openRouterAttempts(), ({ key, model }) => streamOpenRouterOnce(key, model, systemInstruction, history));
 }
 
 async function* streamLlamaOnce(apiKey: string, systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
@@ -293,7 +325,7 @@ async function* streamLlamaOnce(apiKey: string, systemInstruction: string, histo
 /** Rotates through every configured Llama key, then falls through to OpenRouter on any failure (missing key, exhausted rate limit, or any other error). */
 async function* streamLlamaVetReply(systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
   try {
-    yield* tryWithKeyRotationStream(llamaKeys(), (key) => streamLlamaOnce(key, systemInstruction, history));
+    yield* tryInSequenceStream(llamaKeys(), (key) => streamLlamaOnce(key, systemInstruction, history));
   } catch {
     yield* streamOpenRouterVetReply(systemInstruction, history);
   }
@@ -313,10 +345,10 @@ function formatGroundingReferences(chunks: { web?: { title?: string; uri?: strin
   return `\n\nอ้างอิงข้อมูลจาก:\n${lines.join("\n")}`;
 }
 
-async function* streamGeminiOnce(apiKey: string, systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
+async function* streamGeminiOnce(apiKey: string, model: string, systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
   const ai = new GoogleGenAI({ apiKey });
   const stream = await ai.models.generateContentStream({
-    model: "gemini-2.5-flash",
+    model,
     config: { maxOutputTokens: 1024, systemInstruction, tools: [{ googleSearch: {} }] },
     contents: history.map((turn) => ({
       role: turn.role === "assistant" ? "model" : "user",
@@ -339,9 +371,12 @@ async function* streamGeminiOnce(apiKey: string, systemInstruction: string, hist
  * has been emitted it is never replaced, so falling from Gemini through to
  * Llama then OpenRouter is limited to a rate limit before the user has
  * received any response content — Gemini rotates through every configured
- * key first and only falls through once all of them are 429'd; Llama and
- * OpenRouter (see streamLlamaVetReply/streamOpenRouterVetReply) do the same
- * with their own keys before falling through further.
+ * key × model combination first (a 429 is scoped per Google Cloud project
+ * *and* model, so two keys from the same project need a model change, not
+ * just a key change, to actually get a fresh quota) and only falls through
+ * once all of them are exhausted; Llama and OpenRouter (see
+ * streamLlamaVetReply/streamOpenRouterVetReply) do the same with their own
+ * keys (and, for OpenRouter, models) before falling through further.
  *
  * Google Search grounding is enabled but left to the model's own judgment —
  * only questions it decides need a live lookup come back with sources, so a
@@ -351,7 +386,7 @@ async function* streamGeminiOnce(apiKey: string, systemInstruction: string, hist
  */
 export async function* streamVetReply(systemInstruction: string, history: AiChatTurn[]): AsyncGenerator<string> {
   try {
-    yield* tryWithKeyRotationStream(geminiKeys(), (key) => streamGeminiOnce(key, systemInstruction, history));
+    yield* tryInSequenceStream(geminiAttempts(), ({ key, model }) => streamGeminiOnce(key, model, systemInstruction, history));
   } catch (error) {
     if (!isRateLimitError(error)) throw error;
     yield* streamLlamaVetReply(systemInstruction, history);
