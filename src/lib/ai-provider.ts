@@ -33,8 +33,13 @@ function requireOpenRouterKey(): string {
 
 // OpenRouter's free-tier catalog shifts over time — check openrouter.ai/models
 // for what's currently free if this default ever stops resolving, or set
-// OPENROUTER_MODEL to pin a specific model explicitly.
-const DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+// OPENROUTER_MODEL to pin a specific model explicitly. Deliberately not a
+// "reasoning" model (e.g. gpt-oss/nemotron-nano's free tiers): those stream
+// their answer into a separate `reasoning` field and can leave `content`
+// empty for a while (or entirely, if the token budget runs out first) —
+// verified live against gemma here, so this default is one that populates
+// `content` directly.
+const DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
 const OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 function resolveOpenRouterModel(): string {
