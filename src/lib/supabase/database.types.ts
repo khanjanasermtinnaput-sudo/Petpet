@@ -46,6 +46,8 @@ export type Database = {
           conversation_id: string;
           created_at: string;
           id: string;
+          image_mime_type: string | null;
+          image_path: string | null;
           role: string;
         };
         Insert: {
@@ -54,6 +56,8 @@ export type Database = {
           conversation_id: string;
           created_at?: string;
           id?: string;
+          image_mime_type?: string | null;
+          image_path?: string | null;
           role: string;
         };
         Update: {
@@ -62,6 +66,8 @@ export type Database = {
           conversation_id?: string;
           created_at?: string;
           id?: string;
+          image_mime_type?: string | null;
+          image_path?: string | null;
           role?: string;
         };
         Relationships: [];

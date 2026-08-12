@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getChatContext } from "@/lib/chat-context";
 import { isUuid } from "@/lib/vet-chat";
+import { VET_CHAT_IMAGE_BUCKET } from "@/lib/vet-chat-image";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ conversationId: string }> }) {
   const { conversationId } = await params;
@@ -22,10 +23,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ con
 
   const { data: messages, error: messagesError } = await context.chatClient
     .from("chat_messages")
-    .select("id, role, content, created_at")
+    .select("id, role, content, image_path, image_mime_type, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
   if (messagesError) return NextResponse.json({ error: messagesError.message }, { status: 500 });
 
-  return NextResponse.json({ conversation, messages: messages ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  const imagePaths = (messages ?? []).flatMap((message) => message.image_path ? [message.image_path] : []);
+  const imageUrlByPath = new Map<string, string>();
+  if (imagePaths.length > 0) {
+    const { data: signedImages } = await context.chatClient.storage
+      .from(VET_CHAT_IMAGE_BUCKET)
+      .createSignedUrls(imagePaths, 60 * 60);
+    for (const image of signedImages ?? []) {
+      if (image.path && image.signedUrl) imageUrlByPath.set(image.path, image.signedUrl);
+    }
+  }
+
+  const messagesWithImages = (messages ?? []).map(({ image_path: imagePath, image_mime_type: imageMimeType, ...message }) => ({
+    ...message,
+    imagePath,
+    imageMimeType,
+    imageUrl: imagePath ? imageUrlByPath.get(imagePath) ?? null : null,
+  }));
+
+  return NextResponse.json({ conversation, messages: messagesWithImages }, { headers: { "Cache-Control": "no-store" } });
 }

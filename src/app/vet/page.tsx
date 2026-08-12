@@ -3,14 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavRail } from "@/components/dashboard/NavRail";
 import { NeuThemeToggle } from "@/components/neu/NeuThemeToggle";
-import { ChatInput } from "@/components/vet/ChatInput";
+import { ChatInput, type ChatInputImage } from "@/components/vet/ChatInput";
 import { ChatMessage, type ChatMessageData } from "@/components/vet/ChatMessage";
 import { ChatHistory, type ConversationSummary } from "@/components/vet/ChatHistory";
 
 type ConversationResponse = { conversations?: ConversationSummary[]; error?: string };
-type MessagesResponse = { messages?: Array<{ id: string; role: "user" | "assistant"; content: string }>; error?: string };
+type MessagesResponse = { messages?: Array<{ id: string; role: "user" | "assistant"; content: string; imageUrl?: string | null }>; error?: string };
 type StreamEvent =
   | { type: "conversation"; conversation: ConversationSummary }
+  | { type: "status"; message: string }
   | { type: "chunk"; text: string }
   | { type: "complete" }
   | { type: "error"; message: string };
@@ -31,8 +32,17 @@ export default function VetChatPage() {
   const [messageError, setMessageError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const localPreviewUrls = useRef(new Set<string>());
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => () => {
+    for (const url of localPreviewUrls.current) URL.revokeObjectURL(url);
+  }, []);
+
+  const clearLocalPreviews = useCallback(() => {
+    for (const url of localPreviewUrls.current) URL.revokeObjectURL(url);
+    localPreviewUrls.current.clear();
+  }, []);
 
   const loadConversations = useCallback(async () => {
     setLoadingHistory(true);
@@ -68,6 +78,7 @@ export default function VetChatPage() {
 
   const selectConversation = useCallback(async (conversationId: string) => {
     if (sendingRef.current) return;
+    clearLocalPreviews();
     setSelectedId(conversationId);
     setMessages([]);
     setMessageError(null);
@@ -77,34 +88,61 @@ export default function VetChatPage() {
       const response = await fetch(`/api/chat/conversations/${conversationId}`, { cache: "no-store" });
       const body = await response.json().catch(() => ({})) as MessagesResponse;
       if (!response.ok) throw new Error(body.error ?? "โหลดข้อความไม่สำเร็จ");
-      setMessages((body.messages ?? []).map(({ role, content }) => ({ role, content })));
+      setMessages((body.messages ?? []).map(({ role, content, imageUrl }) => ({ role, content, imageUrl })));
     } catch (error) {
       setMessageError(error instanceof Error ? error.message : "โหลดข้อความไม่สำเร็จ");
     } finally {
       setLoadingMessages(false);
     }
-  }, []);
+  }, [clearLocalPreviews]);
 
   const startNewChat = useCallback(() => {
     if (sendingRef.current) return;
+    clearLocalPreviews();
     setSelectedId(null);
     setMessages([]);
     setMessageError(null);
     setHistoryOpen(false);
-  }, []);
+  }, [clearLocalPreviews]);
 
-  const handleSend = useCallback(async (userText: string) => {
-    if (sendingRef.current) return;
+  const handleSend = useCallback(async (userText: string, image?: ChatInputImage): Promise<boolean> => {
+    if (sendingRef.current) return false;
     sendingRef.current = true;
     setSending(true);
     setMessageError(null);
-    setMessages((previous) => [...previous, { role: "user", content: userText }, temporaryAssistant()]);
+    if (image) localPreviewUrls.current.add(image.previewUrl);
+    setMessages((previous) => [
+      ...previous,
+      { role: "user", content: userText, imageUrl: image?.previewUrl },
+      temporaryAssistant(image ? "กำลังดูภาพ..." : ""),
+    ]);
+
+    const requestController = new AbortController();
+    let inactivityTimeout: number | undefined;
+    const resetInactivityTimeout = () => {
+      if (inactivityTimeout !== undefined) window.clearTimeout(inactivityTimeout);
+      inactivityTimeout = window.setTimeout(() => requestController.abort(), 60_000);
+    };
 
     try {
+      resetInactivityTimeout();
+      const clientMessageId = crypto.randomUUID();
+      const requestBody = image ? new FormData() : JSON.stringify({
+        conversationId: selectedId ?? undefined,
+        message: userText,
+        clientMessageId,
+      });
+      if (image && requestBody instanceof FormData) {
+        if (selectedId) requestBody.set("conversationId", selectedId);
+        requestBody.set("message", userText);
+        requestBody.set("clientMessageId", clientMessageId);
+        requestBody.set("image", image.file);
+      }
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: selectedId ?? undefined, message: userText, clientMessageId: crypto.randomUUID() }),
+        headers: image ? undefined : { "Content-Type": "application/json" },
+        body: requestBody,
+        signal: requestController.signal,
       });
       if (!response.ok || !response.body) {
         const body = await response.json().catch(() => ({})) as { error?: string };
@@ -121,6 +159,9 @@ export default function VetChatPage() {
           setSelectedId(event.conversation.id);
           setConversations((current) => [event.conversation, ...current.filter((item) => item.id !== event.conversation.id)]);
         }
+        if (event.type === "status" && !assistantText) {
+          setMessages((current) => [...current.slice(0, -1), temporaryAssistant(event.message)]);
+        }
         if (event.type === "chunk") {
           assistantText += event.text;
           setMessages((current) => [...current.slice(0, -1), temporaryAssistant(assistantText)]);
@@ -128,13 +169,15 @@ export default function VetChatPage() {
         if (event.type === "complete") completed = true;
         if (event.type === "error") {
           setMessageError(event.message);
-          setMessages((current) => [...current.slice(0, -1), temporaryAssistant(event.message)]);
+          const displayed = assistantText ? `${assistantText}\n\n${event.message}` : event.message;
+          setMessages((current) => [...current.slice(0, -1), temporaryAssistant(displayed)]);
         }
       };
 
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        resetInactivityTimeout();
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -146,11 +189,16 @@ export default function VetChatPage() {
       if (buffer) processEvent(JSON.parse(buffer) as StreamEvent);
       if (!completed) throw new Error("VET AI ตอบไม่สำเร็จ");
       await loadConversations();
+      return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "VET AI ตอบไม่สำเร็จ";
+      const message = error instanceof Error && error.name === "AbortError"
+        ? "การส่งรูปหรือข้อความใช้เวลานานเกินไป กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"
+        : error instanceof Error ? error.message : "VET AI ตอบไม่สำเร็จ";
       setMessageError(message);
       setMessages((current) => [...current.slice(0, -1), temporaryAssistant(message)]);
+      return false;
     } finally {
+      if (inactivityTimeout !== undefined) window.clearTimeout(inactivityTimeout);
       sendingRef.current = false;
       setSending(false);
     }
@@ -176,7 +224,7 @@ export default function VetChatPage() {
           <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-3 px-4 py-4 sm:px-8">
             {loadingMessages ? <p className="mt-8 text-center text-sm text-neu-ink-muted">กำลังโหลดข้อความ...</p> : null}
             {messages.length === 0 && !messageError && !loadingMessages ? <p className="mt-8 text-center text-sm text-neu-ink-muted">สอบถามเกี่ยวกับสุขภาพและพฤติกรรมการกินของน้องได้เลย</p> : null}
-            {messages.map((message, index) => <ChatMessage key={`${message.role}-${index}`} role={message.role} content={message.content} />)}
+            {messages.map((message, index) => <ChatMessage key={`${message.role}-${index}`} {...message} />)}
             {messageError ? <p role="alert" className="text-center text-sm font-semibold text-neu-warning">{messageError}</p> : null}
             <div ref={scrollRef} />
           </main>

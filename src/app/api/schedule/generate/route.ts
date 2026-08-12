@@ -1,9 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+import { generateScheduleText } from "@/lib/ai-provider";
 import { createClient } from "@/lib/supabase/server";
 import { getPet } from "@/lib/active-pet";
 import { buildSchedulePrompt } from "@/lib/schedule-prompt";
 import type { FeedingSchedule, MealSlot } from "@/lib/types";
+import { checkReportedNutrition } from "@/lib/vet-nutrition";
 
 const MEAL_SLOTS: readonly MealSlot[] = ["breakfast", "lunch", "dinner"];
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -14,9 +15,23 @@ interface GeneratedMeal {
   target_g: number;
 }
 
+interface GeneratedSchedule {
+  rer_kcal: number;
+  life_stage_factor: number;
+  mer_kcal: number;
+  kcal_per_gram_assumed: number;
+  daily_target_g: number;
+  meals: GeneratedMeal[];
+}
+
 const SCHEDULE_SCHEMA = {
   type: "object",
   properties: {
+    rer_kcal: { type: "number", description: "Resting Energy Requirement in kcal/day = 70 × weight_kg^0.75." },
+    life_stage_factor: { type: "number", description: "Life-stage multiplier selected from the species/age table given in the prompt." },
+    mer_kcal: { type: "number", description: "Maintenance Energy Requirement in kcal/day = rer_kcal × life_stage_factor." },
+    kcal_per_gram_assumed: { type: "number", description: "Assumed food calorie density in kcal/gram — always 3.5 for this app's default kibble assumption." },
+    daily_target_g: { type: "number", description: "Total daily food target in grams = mer_kcal ÷ kcal_per_gram_assumed; equals the sum of all meals' target_g." },
     meals: {
       type: "array",
       items: {
@@ -34,13 +49,12 @@ const SCHEDULE_SCHEMA = {
       },
     },
   },
-  required: ["meals"],
+  required: ["rer_kcal", "life_stage_factor", "mer_kcal", "kcal_per_gram_assumed", "daily_target_g", "meals"],
   additionalProperties: false,
 };
 
 export async function POST() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!process.env.GEMINI_API_KEY?.trim()) {
     return NextResponse.json(
       { error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY บนเซิร์ฟเวอร์" },
       { status: 500 },
@@ -54,28 +68,22 @@ export async function POST() {
     return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยง" }, { status: 404 });
   }
 
-  const ai = new GoogleGenAI({ apiKey });
-
   let meals: GeneratedMeal[];
+  let nutritionReport: Omit<GeneratedSchedule, "meals">;
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        maxOutputTokens: 1024,
-        // Without this, gemini-2.5-flash's reasoning tokens are drawn from
-        // the same maxOutputTokens budget and can consume it entirely
-        // before any JSON is emitted, truncating the response mid-string.
-        thinkingConfig: { thinkingBudget: 0 },
-        responseMimeType: "application/json",
-        responseSchema: SCHEDULE_SCHEMA,
-      },
-      contents: [{ role: "user", parts: [{ text: buildSchedulePrompt(pet) }] }],
+    const responseText = await generateScheduleText({
+      prompt: buildSchedulePrompt(pet),
+      schema: SCHEDULE_SCHEMA,
     });
-
-    if (!response.text) throw new Error("no text in response");
-
-    const parsed = JSON.parse(response.text) as { meals: GeneratedMeal[] };
+    const parsed = JSON.parse(responseText) as GeneratedSchedule;
     meals = parsed.meals;
+    nutritionReport = {
+      rer_kcal: parsed.rer_kcal,
+      life_stage_factor: parsed.life_stage_factor,
+      mer_kcal: parsed.mer_kcal,
+      kcal_per_gram_assumed: parsed.kcal_per_gram_assumed,
+      daily_target_g: parsed.daily_target_g,
+    };
   } catch {
     // Don't leak raw SyntaxError/SDK error text (e.g. a JSON.parse failure
     // on a truncated response) to the user — same friendly message as the
@@ -99,6 +107,16 @@ export async function POST() {
     );
   }
 
+  const totalDailyG = validMeals.reduce((sum, m) => sum + m.target_g, 0);
+
+  const nutritionCheck = checkReportedNutrition(pet, nutritionReport, totalDailyG);
+  if (!nutritionCheck.ok) {
+    return NextResponse.json(
+      { error: "AI ไม่สามารถวางแผนตารางอาหารที่ถูกต้องได้ กรุณาลองใหม่" },
+      { status: 502 },
+    );
+  }
+
   const { error: upsertError } = await supabase.from("feeding_schedule").upsert(
     validMeals.map((m) => ({
       device_id: pet.device_id,
@@ -116,7 +134,6 @@ export async function POST() {
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
   }
 
-  const totalDailyG = validMeals.reduce((sum, m) => sum + m.target_g, 0);
   await supabase.from("pets").update({ daily_target_g: Math.round(totalDailyG) }).eq("id", pet.id);
 
   const { data: schedule, error: fetchError } = await supabase

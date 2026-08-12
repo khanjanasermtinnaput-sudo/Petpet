@@ -1,6 +1,9 @@
+import Image from "next/image";
+
 export interface ChatMessageData {
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string | null;
 }
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
@@ -24,7 +27,7 @@ function linkifyContent(content: string) {
   );
 }
 
-export function ChatMessage({ role, content }: ChatMessageData) {
+export function ChatMessage({ role, content, imageUrl }: ChatMessageData) {
   const isUser = role === "user";
 
   return (
@@ -34,6 +37,16 @@ export function ChatMessage({ role, content }: ChatMessageData) {
           isUser ? "text-neu-accent" : "text-neu-ink"
         }`}
       >
+        {imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt="รูปภาพที่แนบในแชท"
+            width={480}
+            height={360}
+            unoptimized
+            className="mb-2 max-h-72 w-full rounded-xl object-cover"
+          />
+        ) : null}
         {content ? linkifyContent(content) : isUser ? "" : "…"}
       </div>
     </div>
