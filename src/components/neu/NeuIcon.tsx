@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-export type NeuIconName = "home" | "history" | "vet" | "settings" | "feed" | "send" | "check" | "pending";
+export type NeuIconName = "home" | "history" | "vet" | "settings" | "feed" | "send" | "check" | "pending" | "logout";
 
 export function NeuIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: NeuIconName }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -14,6 +14,7 @@ export function NeuIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: Ne
       {name === "send" && <><path d="m3 4 18 8-18 8 3-8-3-8Z" /><path d="M6 12h15" /></>}
       {name === "check" && <path d="m5 12 4.2 4.2L19 6.5" />}
       {name === "pending" && <><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></>}
+      {name === "logout" && <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>}
     </svg>
   );
 }

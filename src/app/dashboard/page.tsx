@@ -4,8 +4,8 @@ import { getPet } from "@/lib/active-pet";
 import type { FeedEvent } from "@/lib/types";
 import { DashboardClient } from "./DashboardClient";
 
-// Tray readings, UV status, and the low-eating check all change
-// continuously — must not be statically prerendered at build time.
+// Tray readings and the low-eating check both change continuously —
+// must not be statically prerendered at build time.
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
@@ -14,7 +14,7 @@ export default async function DashboardPage() {
 
   if (!pet) redirect("/onboarding");
 
-  const [{ data: latestReading }, { data: status }, { data: recentEvents }] = await Promise.all([
+  const [{ data: latestReading }, { data: recentEvents }] = await Promise.all([
     supabase
       .from("feeder_readings")
       .select("*")
@@ -22,7 +22,6 @@ export default async function DashboardPage() {
       .order("recorded_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("device_status").select("*").eq("device_id", pet.device_id).maybeSingle(),
     supabase
       .from("feed_events")
       .select("*")
@@ -35,7 +34,6 @@ export default async function DashboardPage() {
     <DashboardClient
       pet={pet}
       initialReading={latestReading ?? null}
-      initialStatus={status ?? null}
       recentEvents={(recentEvents ?? []) as FeedEvent[]}
     />
   );

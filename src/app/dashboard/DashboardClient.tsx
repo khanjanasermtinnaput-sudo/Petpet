@@ -16,7 +16,6 @@ import {
   TOAST_HIDE_MS,
 } from "@/lib/feeder-commands";
 import type {
-  DeviceStatus,
   FeedEvent,
   FeederCommand,
   FeederReading,
@@ -68,19 +67,16 @@ async function fetchCommandStatus(commandId: string): Promise<FeederCommand | nu
 interface DashboardClientProps {
   pet: Pet;
   initialReading: FeederReading | null;
-  initialStatus: DeviceStatus | null;
   recentEvents: FeedEvent[];
 }
 
 export function DashboardClient({
   pet,
   initialReading,
-  initialStatus,
   recentEvents,
 }: DashboardClientProps) {
   const router = useRouter();
   const [reading, setReading] = useState(initialReading);
-  const [status, setStatus] = useState(initialStatus);
   const [deviceConnection, setDeviceConnection] = useState<DeviceStatusResponse | null>(null);
   const [feedDiagnostic, setFeedDiagnostic] = useState<FeedDiagnostic | null>(null);
   const [alertDismissed, setAlertDismissed] = useState(false);
@@ -102,18 +98,14 @@ export function DashboardClient({
     let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     async function pollOnce() {
-      const [{ data: r }, { data: s }] = await Promise.all([
-        supabase
-          .from("feeder_readings")
-          .select("*")
-          .eq("device_id", pet.device_id)
-          .order("recorded_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase.from("device_status").select("*").eq("device_id", pet.device_id).maybeSingle(),
-      ]);
+      const { data: r } = await supabase
+        .from("feeder_readings")
+        .select("*")
+        .eq("device_id", pet.device_id)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (r) setReading(r);
-      if (s) setStatus(s);
     }
 
     const channel = supabase
@@ -127,19 +119,6 @@ export function DashboardClient({
           filter: `device_id=eq.${pet.device_id}`,
         },
         (payload) => setReading(payload.new),
-      )
-      .on<DeviceStatus>(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "device_status",
-          filter: `device_id=eq.${pet.device_id}`,
-        },
-        (payload) => {
-          if (payload.eventType === "DELETE") return;
-          setStatus(payload.new);
-        },
       )
       .on<FeederCommand>(
         "postgres_changes",
@@ -328,7 +307,7 @@ export function DashboardClient({
 
   return (
     <div className="min-h-screen pb-28 md:pb-8 md:pl-24">
-      <TopBar petName={pet.name} uvOn={status?.uv_status ?? false} />
+      <TopBar petName={pet.name} />
       <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 sm:px-8">
         <DeviceConnectionStatus onStatusChange={setDeviceConnection} />
         <FeedCommandStatus diagnostic={feedDiagnostic} onDismiss={() => setFeedDiagnostic(null)} />
