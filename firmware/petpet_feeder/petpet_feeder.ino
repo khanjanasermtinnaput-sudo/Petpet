@@ -32,14 +32,15 @@
 static inline bool due(uint32_t deadline) {
   return (int32_t)(millis() - deadline) >= 0;
 }
-
 enum State {
   ST_WIFI_CONNECT,
   ST_NET_INIT,
   ST_IDLE,
   ST_DISPENSE_OPEN,
+  ST_DISPENSE_STOP_OPEN,
   ST_DISPENSE_WAIT,
   ST_DISPENSE_CLOSE,
+  ST_DISPENSE_STOP_CLOSE,
   ST_WEIGH_AFTER,
   ST_REPORT,
 };
@@ -58,12 +59,26 @@ static BearSSL::X509List trustAnchors(ROOT_CA_PEM);
 static HTTPClient http;
 static Servo feedServo;
 
+// UV is fail-closed: it starts off and turns off on any unknown lid state.
+static bool uvOn = false;
+static uint32_t nextLidSampleAt = 0;
+
+#if HAS_ULTRASONIC
+static float lidDistanceSamples[3] = {0.0f, 0.0f, 0.0f};
+static uint8_t lidSampleCount = 0;
+static uint8_t lidSampleIndex = 0;
+static uint8_t lidClosedConfirmations = 0;
+#endif
+
 // In-flight command.
 static char cmdId[40] = {0};
 static float cmdTargetG = 0.0f;
 static float trayBeforeG = 0.0f;
 static float trayAfterG = 0.0f;
 static bool haveWeights = false;
+#if HAS_LOAD_CELL
+static float dispenseCloseAtG = 0.0f;
+#endif
 // Set when a dispense was cut short by a WiFi drop. cmdId is deliberately kept
 // (not cleared) in that case so ST_REPORT can tell the server the true
 // outcome once reconnected, instead of leaving the command to rot until the
@@ -74,14 +89,19 @@ static bool cmdAborted = false;
 // Deadlines.
 static uint32_t nextPollAt = 0;
 static uint32_t nextReadingAt = 0;
+static uint32_t servoMotionEndsAt = 0;
 static uint32_t dispenseEndsAt = 0;
 static uint32_t weighAt = 0;
 static uint32_t nextReportAt = 0;
 static uint8_t reportAttempts = 0;
 static uint32_t wifiRetryAt = 0;
-static uint32_t wifiBackoffMs = 1000;
+// Let the SDK's auto-reconnect complete before falling back to a fresh
+// WiFi.begin(). Calling reconnect() while already disconnected can be a no-op
+// on ESP8266, while repeatedly calling begin() interrupts DHCP in progress.
+static uint32_t wifiBackoffMs = 15000;
 static uint32_t wifiDownSince = 0;
 static uint32_t nextHeapLogAt = 0;
+static WiFiEventHandler wifiDisconnectHandler;
 
 // Deferred consumption check: SETTLE_DELAY_MS after a good feed, weigh the
 // tray again and report what the pet actually ate.
@@ -95,6 +115,9 @@ static uint32_t settleAt = 0;
 static float lastTrayG = 0.0f;
 
 #if HAS_LOAD_CELL
+static long lastScaleRaw = 0;
+static uint32_t nextScaleLogAt = 0;
+
 static bool scaleReady() {
   return digitalRead(HX711_DOUT_PIN) == LOW;
 }
@@ -128,6 +151,7 @@ static long scaleReadRaw() {
 static void sampleScale() {
   if (!scaleReady()) return;
   long raw = scaleReadRaw();
+  lastScaleRaw = raw;
   lastTrayG = (float)(raw - SCALE_TARE_RAW) / SCALE_COUNTS_PER_G;
   if (lastTrayG < 0.0f) lastTrayG = 0.0f;
 }
@@ -138,6 +162,116 @@ static void sampleScale() {}
 static float trayWeightG() {
   return lastTrayG;
 }
+
+// --------------------------------------------------------------------------
+// Lid sensor and UV safety control
+// --------------------------------------------------------------------------
+
+static uint8_t uvOutputLevel(bool enabled) {
+  return enabled
+      ? (UV_ACTIVE_HIGH ? HIGH : LOW)
+      : (UV_ACTIVE_HIGH ? LOW : HIGH);
+}
+
+static void setUv(bool enabled, const char* reason) {
+  digitalWrite(UV_PIN, uvOutputLevel(enabled));
+  if (uvOn != enabled) {
+    Serial.printf("[uv] %s (%s)\n", enabled ? "on" : "off", reason);
+  }
+  uvOn = enabled;
+}
+
+static void initializeUv() {
+  pinMode(UV_PIN, OUTPUT);
+  digitalWrite(UV_PIN, uvOutputLevel(false));
+  uvOn = false;
+}
+
+#if HAS_ULTRASONIC
+static bool readLidDistanceCm(float* distanceCm) {
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(ULTRASONIC_TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+
+  const unsigned long echoUs = pulseIn(
+      ULTRASONIC_ECHO_PIN, HIGH, ULTRASONIC_ECHO_TIMEOUT_US);
+  if (echoUs == 0) return false;
+
+  *distanceCm = (float)echoUs * 0.01715f;
+  return *distanceCm >= 1.0f;
+}
+
+static void resetLidSamples() {
+  lidSampleCount = 0;
+  lidSampleIndex = 0;
+  lidClosedConfirmations = 0;
+}
+
+static bool medianLidDistance(float* distanceCm) {
+  if (lidSampleCount < 3) return false;
+
+  float values[3] = {
+      lidDistanceSamples[0], lidDistanceSamples[1], lidDistanceSamples[2]};
+  if (values[0] > values[1]) {
+    const float swap = values[0]; values[0] = values[1]; values[1] = swap;
+  }
+  if (values[1] > values[2]) {
+    const float swap = values[1]; values[1] = values[2]; values[2] = swap;
+  }
+  if (values[0] > values[1]) {
+    const float swap = values[0]; values[0] = values[1]; values[1] = swap;
+  }
+  *distanceCm = values[1];
+  return true;
+}
+
+static void sampleLid() {
+  if (!due(nextLidSampleAt)) return;
+  nextLidSampleAt = millis() + ULTRASONIC_SAMPLE_INTERVAL_MS;
+
+  float distanceCm = 0.0f;
+  if (!readLidDistanceCm(&distanceCm)) {
+    resetLidSamples();
+    setUv(false, "lid sensor timeout");
+    return;
+  }
+
+  // Opening and unknown states are always fail-closed. Do not wait for the
+  // median here: exposed UV must stop as soon as the lid is known open.
+  if (distanceCm >= LID_OPEN_DISTANCE_CM) {
+    resetLidSamples();
+    setUv(false, "lid open");
+    return;
+  }
+
+  if (distanceCm > LID_CLOSED_DISTANCE_CM) {
+    lidClosedConfirmations = 0;
+    return;
+  }
+
+  lidDistanceSamples[lidSampleIndex] = distanceCm;
+  lidSampleIndex = (lidSampleIndex + 1) % 3;
+  if (lidSampleCount < 3) ++lidSampleCount;
+
+  float medianCm = 0.0f;
+  if (!medianLidDistance(&medianCm)) return;
+  if (medianCm > LID_CLOSED_DISTANCE_CM) {
+    lidClosedConfirmations = 0;
+    return;
+  }
+
+  if (lidClosedConfirmations < LID_CLOSED_CONFIRMATIONS) {
+    ++lidClosedConfirmations;
+  }
+  if (lidClosedConfirmations >= LID_CLOSED_CONFIRMATIONS) {
+    setUv(true, "lid closed");
+  }
+}
+#else
+static void sampleLid() {}
+#endif
 
 // --------------------------------------------------------------------------
 // HTTP
@@ -322,25 +456,37 @@ static void reportReading() {
 }
 #endif
 
+static void reportDeviceStatus() {
+  char body[448];
+  snprintf(body, sizeof(body),
+           R"json({"p_device_id":"%s","p_secret":"%s","p_tray_weight_g":%.2f,"p_tank_weight_g":%.2f,"p_uv_status":%s,"p_wifi_rssi":%d,"p_firmware_version":"%s"})json",
+           DEVICE_ID, DEVICE_SECRET, trayWeightG(), 0.0f,
+           uvOn ? "true" : "false", WiFi.RSSI(), FIRMWARE_VERSION);
+
+  postRpc("device_report_reading", body, nullptr);
+}
+
 // --------------------------------------------------------------------------
 // WiFi
 // --------------------------------------------------------------------------
 // True while the gate is, or is about to be, physically open.
 static bool dispensing() {
   return state == ST_DISPENSE_OPEN
+      || state == ST_DISPENSE_STOP_OPEN
       || state == ST_DISPENSE_WAIT
-      || state == ST_DISPENSE_CLOSE;
+      || state == ST_DISPENSE_CLOSE
+      || state == ST_DISPENSE_STOP_CLOSE;
 }
 
-// Fail-safe close. The gate must never be left open by any path that leaves
-// the dispense states early: the servo holds SERVO_OPEN_ANGLE for as long as
-// it is attached, so a WiFi drop mid-dispense would otherwise keep pouring
-// for the whole reconnect window (up to the 5-minute restart) and empty the
-// hopper into the bowl. Safe to call from any state.
+// Fail-safe close. A continuous-rotation servo must receive an explicit
+// reverse pulse for the measured gate travel, then neutral; merely detaching
+// it would leave the gate in whichever position it had reached.
 static void closeGate() {
   feedServo.attach(SERVO_PIN);
-  feedServo.write(SERVO_CLOSED_ANGLE);
-  delay(300);
+  feedServo.writeMicroseconds(SERVO_CLOSE_US);
+  delay(SERVO_GATE_TRAVEL_MS);
+  feedServo.writeMicroseconds(SERVO_NEUTRAL_US);
+  delay(50);  // send several neutral pulses before detaching
   feedServo.detach();
 }
 
@@ -362,12 +508,25 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println(F("[boot] petpet feeder " FIRMWARE_VERSION));
+  Serial.printf("[boot] reset=%s\n", ESP.getResetReason().c_str());
 
-  // Park the gate closed before anything else can take time.
-  feedServo.attach(SERVO_PIN);
-  feedServo.write(SERVO_CLOSED_ANGLE);
-  delay(300);
-  feedServo.detach();
+  // Keep a disconnect reason in Serial Monitor. This distinguishes an AP
+  // rejection from a brownout/reset without changing connection behavior.
+  wifiDisconnectHandler = WiFi.onStationModeDisconnected(
+      [](const WiFiEventStationModeDisconnected& event) {
+        Serial.printf("[wifi] disconnected reason=%d\n", event.reason);
+      });
+
+  initializeUv();
+#if HAS_ULTRASONIC
+  pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
+  pinMode(ULTRASONIC_ECHO_PIN, INPUT);
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+#endif
+
+  // Park the continuous-rotation gate closed before anything else can take
+  // time. The servo receives reverse motion only for the measured travel.
+  closeGate();
 
 #if HAS_LOAD_CELL
   pinMode(HX711_SCK_PIN, OUTPUT);
@@ -411,6 +570,7 @@ static void netInit() {
 
   nextPollAt = millis();
   nextReadingAt = millis();
+  nextLidSampleAt = millis();
 
   // Resume an unreported result instead of dropping it. cmdId survives a WiFi
   // outage in exactly two cases: the network died between the gate closing
@@ -446,14 +606,18 @@ void loop() {
       // Force a fresh socket; session resumption makes reconnecting cheap.
       tlsClient.stop();
       wifiDownSince = millis();
-      wifiBackoffMs = 1000;
-      wifiRetryAt = millis();
+      wifiBackoffMs = 15000;
+      wifiRetryAt = millis() + wifiBackoffMs;
       state = ST_WIFI_CONNECT;
     }
 
     if (due(wifiRetryAt)) {
-      Serial.printf("[wifi] connecting (backoff %lu ms)\n", (unsigned long)wifiBackoffMs);
-      WiFi.reconnect();
+      // The SDK normally reconnects automatically. This is only a bounded
+      // fallback after it has had time to finish, not a competing reconnect
+      // loop that can repeatedly interrupt association or DHCP.
+      Serial.printf("[wifi] reconnect fallback (wait %lu ms, status=%d)\n",
+                    (unsigned long)wifiBackoffMs, WiFi.status());
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
       wifiRetryAt = millis() + wifiBackoffMs;
       wifiBackoffMs = wifiBackoffMs < 30000 ? wifiBackoffMs * 2 : 30000;
     }
@@ -478,7 +642,7 @@ void loop() {
     Serial.print(F("[wifi] connected "));
     Serial.println(WiFi.localIP());
     wifiDownSince = 0;
-    wifiBackoffMs = 1000;
+    wifiBackoffMs = 15000;
     state = ST_NET_INIT;
   }
 
@@ -488,6 +652,14 @@ void loop() {
   }
 
   sampleScale();
+  sampleLid();
+
+#if HAS_LOAD_CELL
+  if (due(nextScaleLogAt)) {
+    Serial.printf("[scale] raw=%ld tray=%.2fg\n", lastScaleRaw, lastTrayG);
+    nextScaleLogAt = millis() + 5000UL;
+  }
+#endif
 
   if (due(nextHeapLogAt)) {
     Serial.printf("[heap] %u rssi=%d\n", ESP.getFreeHeap(), WiFi.RSSI());
@@ -497,9 +669,10 @@ void loop() {
   // --- state machine ------------------------------------------------------
   switch (state) {
     case ST_IDLE: {
+      // 18 KB leaves headroom for BearSSL while allowing the UV/lid state to run.
       // A low heap makes a TLS write fail in ways that look like a network
       // fault. Skip the cycle rather than thrash.
-      if (ESP.getFreeHeap() < 20000) {
+      if (ESP.getFreeHeap() < 18000) {
         yield();
         return;
       }
@@ -509,12 +682,17 @@ void loop() {
         reportConsumption();
         return;
       }
+#endif
+
       if (due(nextReadingAt)) {
+#if HAS_LOAD_CELL
         reportReading();
+#else
+        reportDeviceStatus();
+#endif
         nextReadingAt = millis() + READING_INTERVAL_MS;
         return;
       }
-#endif
 
       if (due(nextPollAt)) {
         nextPollAt = millis() + POLL_INTERVAL_MS;
@@ -526,10 +704,7 @@ void loop() {
     case ST_DISPENSE_OPEN: {
       trayBeforeG = trayWeightG();
 
-      uint32_t ms = (uint32_t)((cmdTargetG / GRAMS_PER_SECOND) * 1000.0f);
-      if (ms > MAX_DISPENSE_MS) ms = MAX_DISPENSE_MS;
-
-      if (cmdTargetG <= 0.0f || ms == 0) {
+      if (cmdTargetG <= 0.0f) {
         // Nothing to do — the tray already meets the target. Report success
         // so the command doesn't sit until it times out.
         haveWeights = false;
@@ -538,28 +713,86 @@ void loop() {
         break;
       }
 
-      Serial.printf("[servo] open %lu ms\n", (unsigned long)ms);
+#if HAS_LOAD_CELL
+      // The target is the additional food requested for this command. Stop
+      // before that target because material already beyond the gate continues
+      // falling while the servo closes. For tiny requests, do not subtract the
+      // entire coast allowance or the gate would close immediately.
+      const float cutoffAmountG = cmdTargetG > DISPENSE_COAST_G
+          ? cmdTargetG - DISPENSE_COAST_G
+          : cmdTargetG;
+      dispenseCloseAtG = trayBeforeG + cutoffAmountG;
+      Serial.printf("[servo] opening %lu ms; target=%.1fg close-at=%.1fg timeout=%lu ms\n",
+                    (unsigned long)SERVO_GATE_TRAVEL_MS, cmdTargetG,
+                    dispenseCloseAtG, (unsigned long)MAX_DISPENSE_MS);
+#else
+      uint32_t dispenseMs = (uint32_t)((cmdTargetG / GRAMS_PER_SECOND) * 1000.0f);
+      if (dispenseMs > MAX_DISPENSE_MS) dispenseMs = MAX_DISPENSE_MS;
+      dispenseEndsAt = millis() + dispenseMs;
+      Serial.printf("[servo] opening %lu ms; safety timeout=%lu ms\n",
+                    (unsigned long)SERVO_GATE_TRAVEL_MS,
+                    (unsigned long)dispenseMs);
+#endif
       feedServo.attach(SERVO_PIN);
-      feedServo.write(SERVO_OPEN_ANGLE);
-      dispenseEndsAt = millis() + ms;
+      feedServo.writeMicroseconds(SERVO_OPEN_US);
+      servoMotionEndsAt = millis() + SERVO_GATE_TRAVEL_MS;
+      state = ST_DISPENSE_STOP_OPEN;
+      break;
+    }
+
+    case ST_DISPENSE_STOP_OPEN: {
+      if (!due(servoMotionEndsAt)) {
+        yield();
+        break;
+      }
+      feedServo.writeMicroseconds(SERVO_NEUTRAL_US);
+      delay(50);  // ensure the continuous-rotation motor has stopped
+      feedServo.detach();
+#if HAS_LOAD_CELL
+      dispenseEndsAt = millis() + MAX_DISPENSE_MS;
+#endif
+      Serial.println(F("[servo] stopped open; waiting for tray weight"));
       state = ST_DISPENSE_WAIT;
       break;
     }
 
     case ST_DISPENSE_WAIT: {
-      // No network I/O while the gate is open. The servo pulse train comes
-      // from a timer ISR, and BearSSL's crypto plus the WiFi stack hold
-      // interrupts off long enough to visibly glitch it.
-      if (due(dispenseEndsAt)) state = ST_DISPENSE_CLOSE;
+      // The motor is stopped while the gate is open. Do not run network I/O
+      // here so the load-cell cutoff remains responsive.
+#if HAS_LOAD_CELL
+      if (trayWeightG() >= dispenseCloseAtG) {
+        Serial.printf("[servo] close by weight tray=%.1fg threshold=%.1fg\n",
+                      trayWeightG(), dispenseCloseAtG);
+        state = ST_DISPENSE_CLOSE;
+        break;
+      }
+#endif
+      if (due(dispenseEndsAt)) {
+        Serial.println(F("[servo] close by safety timeout"));
+        state = ST_DISPENSE_CLOSE;
+      }
       yield();
       break;
     }
 
     case ST_DISPENSE_CLOSE: {
-      feedServo.write(SERVO_CLOSED_ANGLE);
-      delay(300);  // let the gate physically reach the stop before detaching
+      feedServo.attach(SERVO_PIN);
+      feedServo.writeMicroseconds(SERVO_CLOSE_US);
+      servoMotionEndsAt = millis() + SERVO_GATE_TRAVEL_MS;
+      Serial.printf("[servo] closing %lu ms\n", (unsigned long)SERVO_GATE_TRAVEL_MS);
+      state = ST_DISPENSE_STOP_CLOSE;
+      break;
+    }
+
+    case ST_DISPENSE_STOP_CLOSE: {
+      if (!due(servoMotionEndsAt)) {
+        yield();
+        break;
+      }
+      feedServo.writeMicroseconds(SERVO_NEUTRAL_US);
+      delay(50);  // send several neutral pulses before detaching
       feedServo.detach();
-      Serial.println(F("[servo] closed"));
+      Serial.println(F("[servo] stopped closed"));
 
       // Give the load cell time to stop ringing before believing it.
       weighAt = millis() + 800;

@@ -45,7 +45,7 @@ functions against the `devices` table, which is deny-all to `anon`.
 | Report readings as another device | Yes — needs that device's secret |
 | Replay a result report | Yes — idempotent against the `running` state |
 | Queue two feeds at once | Yes — partial unique index on `(device_id)` |
-| Feed in a loop to overfeed the animal | Bounded — 10 commands/device/hour |
+| Feed in a loop to overfeed the animal | Not bounded during controlled testing |
 | **Trigger a single feed on your feeder** | **No** |
 
 That last row is deliberate and worth stating plainly: `enqueue_feed_command`
@@ -53,11 +53,9 @@ takes no secret, because the web app runs on the public anon key and a secret
 there would just be published to every browser. Anyone who can guess a
 `device_id` can queue a feed.
 
-**Rate limiting bounds the damage but is not authentication.** Ten commands per
-device per hour (`0007`) leaves room for three scheduled meals plus retries,
-and turns "empty the hopper into the bowl" into "one unwanted meal". Exceeding
-it raises SQLSTATE `54000`, which `/api/feed/manual` surfaces as HTTP 429 with
-a Thai message rather than a generic 500.
+**There is no hourly rate limit during controlled testing.** A completed command
+can be queued again immediately. The database still permits only one
+`pending`/`running` command per feeder, preventing duplicate concurrent runs.
 
 Genuinely closing this needs user accounts. Supabase Auth was removed on
 purpose in migration 0002 (no login, no sessions, no `@supabase/ssr`), so
@@ -439,6 +437,9 @@ Healthy boot:
 | Signal | Pin | Note |
 |---|---|---|
 | Servo | D5 / GPIO14 | |
+| HC-SR04 TRIG | D1 / GPIO5 | Sensor VCC is 5 V |
+| HC-SR04 ECHO | D2 / GPIO4 | Use a 1 kΩ / 2 kΩ divider to reduce 5 V Echo to 3.3 V |
+| UV MOSFET IN | D0 / GPIO16 | Active-high 5 V MOSFET module; UV LED has a separate 5 V supply |
 | HX711 DOUT | D6 / GPIO12 | optional |
 | HX711 SCK | D7 / GPIO13 | optional |
 
@@ -450,6 +451,14 @@ which has no interrupt support.
 > ESP8266 sharing the USB rail. Use a separate 5 V supply, tie the grounds
 > together, and put 470–1000 µF across the servo rail. This is the single most
 > likely field failure, and it looks exactly like a random crash.
+
+### Lid-controlled UV
+
+With `HAS_ULTRASONIC 1`, an HC-SR04 confirms a closed lid at or below 5 cm
+and turns the UV MOSFET on after three stable readings. It turns off
+immediately when the lid is 7 cm or farther away, or on a sensor timeout.
+The UV LED must be enclosed; software sensing is not a substitute for a
+physical interlock when using UV-C.
 
 ### Calibrating
 
@@ -476,7 +485,7 @@ value and set `SCALE_TARE_RAW`. Put a known weight on, then
 | Heap drifting down to ~20 KB | fragmentation | the firmware skips a cycle below 20 KB; check for a modified request path building `String`s |
 | Command stuck `running` forever | device rebooted or lost power mid-feed (not just WiFi loss — see the next row) | resolves itself — `expire_stale_commands()` fails it after 120s |
 | Command `failed` with `error = aborted` within a couple seconds of pressing Feed Now, not 120s | expected: WiFi dropped mid-dispense. The gate closed immediately (no food kept pouring); the firmware reports `aborted` the moment it reconnects instead of leaving the row to rot until the server timeout, and a fresh press is not blocked in the meantime | nothing to fix — this is the fast path working. If it happens on every feed, the WiFi link near the feeder is the actual problem |
-| HTTP 429 from Feed Now | more than 10 commands for this device in the last hour | wait, or raise the threshold in `enqueue_feed_command` |
+| HTTP 429 from Feed Now | an older deployed `enqueue_feed_command` still has its hourly limit | apply `20260812091908_remove_feed_command_rate_limit.sql` |
 | Command `success` with `error = recovered_late_report` | the food was dispensed but the report arrived after the 120s timeout had already failed the row | nothing to fix — the meal was recovered rather than lost. Frequent occurrences mean a flaky link |
 | Feed reported `empty_tank` with a load cell fitted | a full dispense added <25% of target to the tray | refill the hopper, or check the chute for a jam |
 | Gate opened and food kept pouring | fixed in `0007`-era firmware — WiFi loss mid-dispense used to leave the servo attached at `SERVO_OPEN_ANGLE` | reflash; `closeGate()` now runs on any abnormal exit from the dispense states |

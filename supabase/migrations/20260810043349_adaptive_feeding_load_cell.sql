@@ -1,0 +1,35 @@
+-- Adaptive schedule targets are resolved atomically with enqueue. Manual/app commands
+-- deliberately keep additional-dispense semantics. Defaults: 3g tolerance,
+-- 10g minimum dispense (skip), 500g maximum, and 5-minute freshness.
+alter table public.device_status add column if not exists load_cell_enabled boolean not null default false;
+alter table public.feeder_commands add column if not exists requested_target_g numeric, add column if not exists effective_target_g numeric, add column if not exists tray_weight_used_g numeric, add column if not exists adaptive_used boolean not null default false, add column if not exists adaptive_reason text;
+update public.feeder_commands set requested_target_g=target_g, effective_target_g=target_g where requested_target_g is null or effective_target_g is null;
+alter table public.feeder_commands alter column requested_target_g set not null, alter column effective_target_g set not null;
+alter table public.feeder_commands add constraint feeder_commands_requested_nonnegative check(requested_target_g>=0), add constraint feeder_commands_effective_nonnegative check(effective_target_g>=0), add constraint feeder_commands_effective_bounded check(effective_target_g<=requested_target_g);
+alter table public.feed_events add column if not exists requested_target_g numeric, add column if not exists effective_target_g numeric, add column if not exists tray_weight_used_g numeric, add column if not exists adaptive_used boolean not null default false;
+update public.feed_events set requested_target_g=target_g,effective_target_g=target_g where requested_target_g is null or effective_target_g is null;
+alter table public.feed_events alter column requested_target_g set not null, alter column effective_target_g set not null;
+create or replace function public.enqueue_feed_command(p_device_id text,p_pet_id uuid,p_target_g numeric,p_meal_slot text,p_source text default 'app',p_retry_of uuid default null) returns public.feeder_commands language plpgsql security definer set search_path='' as $$
+declare v_cmd public.feeder_commands; v_old public.feeder_commands; v_tray numeric; v_requested numeric:=p_target_g; v_effective numeric:=p_target_g; v_used boolean:=false; v_reason text:='manual_additional';
+begin
+ if p_target_g is null or p_target_g<=0 or p_target_g>500 then raise exception 'invalid requested target' using errcode='22023';end if;perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_device_id,0));perform public.expire_stale_commands();if not exists(select 1 from public.pets where id=p_pet_id and device_id=p_device_id) then raise exception 'unknown pet for this device' using errcode='22023';end if;select * into v_cmd from public.feeder_commands where device_id=p_device_id and status in('pending','running') order by created_at limit 1;if found then return v_cmd;end if;
+ if p_source='retry' and p_retry_of is not null then select * into v_old from public.feeder_commands where id=p_retry_of and device_id=p_device_id and pet_id=p_pet_id;if not found then raise exception 'unknown retry command' using errcode='22023';end if;v_requested:=v_old.requested_target_g;v_effective:=v_old.effective_target_g;v_tray:=v_old.tray_weight_used_g;v_used:=v_old.adaptive_used;v_reason:='retry_immutable';
+ elsif p_source='schedule' then select r.tray_weight_g into v_tray from public.feeder_readings r join public.device_status s using(device_id) where r.device_id=p_device_id and r.recorded_at>=now()-interval '5 minutes' and r.tray_weight_g between -3 and 2000 order by r.recorded_at desc limit 1;if not found then v_reason:='fallback_no_fresh_trusted_reading';elsif v_tray<=3 then v_tray:=0;v_used:=true;v_reason:='adaptive_empty_or_noise';else v_effective:=greatest(0,least(v_requested,v_requested-v_tray));v_used:=true;v_reason:=case when v_effective=0 then 'adaptive_tray_sufficient' when v_effective<10 then 'adaptive_below_minimum_skip' else 'adaptive_shortfall' end;if v_effective>0 and v_effective<10 then v_effective:=0;end if;end if;end if;
+ insert into public.feeder_commands(device_id,pet_id,command,meal_slot,target_g,requested_target_g,effective_target_g,tray_weight_used_g,adaptive_used,adaptive_reason,source,retry_of) values(p_device_id,p_pet_id,'feed',p_meal_slot,v_effective,v_requested,v_effective,v_tray,v_used,v_reason,coalesce(p_source,'app'),p_retry_of) returning * into v_cmd;return v_cmd;
+exception when unique_violation then select * into v_cmd from public.feeder_commands where device_id=p_device_id and status in('pending','running') order by created_at limit 1;return v_cmd;end;$$;
+create or replace function public.device_report_consumption(p_device_id text,p_secret text,p_command_id uuid,p_tray_weight_g numeric) returns jsonb language plpgsql security definer set search_path='' as $$ declare v_cmd public.feeder_commands;v_delta numeric;begin perform public.assert_device(p_device_id,p_secret);if p_tray_weight_g is null or p_tray_weight_g<-3 or p_tray_weight_g>2000 then raise exception 'invalid tray weight' using errcode='22023';end if;select * into v_cmd from public.feeder_commands where id=p_command_id and device_id=p_device_id;if not found or v_cmd.status<>'success' or v_cmd.feed_event_id is null or v_cmd.tray_after_g is null then raise exception 'no settled feed to attribute consumption to' using errcode='22023';end if;v_delta:=greatest(0,v_cmd.tray_after_g-greatest(0,p_tray_weight_g));update public.feed_events set actual_eaten_g=case when v_delta<=3 then 0 else v_delta end where id=v_cmd.feed_event_id;return jsonb_build_object('ok',true);end;$$;
+revoke all on function public.enqueue_feed_command(text,uuid,numeric,text,text,uuid) from public,anon,authenticated;grant execute on function public.enqueue_feed_command(text,uuid,numeric,text,text,uuid) to anon,service_role;
+revoke all on function public.device_report_consumption(text,text,uuid,numeric) from public,anon,authenticated;grant execute on function public.device_report_consumption(text,text,uuid,numeric) to anon;
+notify pgrst,'reload schema';
+-- Preserve existing device_report_result implementation while filling the audit
+-- fields atomically on its same success transition.
+create or replace function public.copy_adaptive_feed_event_audit()
+returns trigger language plpgsql security definer set search_path='' as $$
+begin
+ if new.status='success' and new.feed_event_id is not null and (old.status is distinct from 'success' or old.feed_event_id is distinct from new.feed_event_id) then
+  update public.feed_events set requested_target_g=new.requested_target_g,effective_target_g=new.effective_target_g,tray_weight_used_g=new.tray_weight_used_g,adaptive_used=new.adaptive_used where id=new.feed_event_id;
+ end if; return new;
+end;$$;
+drop trigger if exists feeder_commands_copy_adaptive_feed_event_audit on public.feeder_commands;
+create trigger feeder_commands_copy_adaptive_feed_event_audit after update of status,feed_event_id on public.feeder_commands for each row execute function public.copy_adaptive_feed_event_audit();
+revoke all on function public.copy_adaptive_feed_event_audit() from public,anon,authenticated;

@@ -32,14 +32,24 @@
 
 // Reported to device_status.firmware_version so you can tell which feeder is
 // running what without unplugging it.
-#define FIRMWARE_VERSION "1.0.1"
+#define FIRMWARE_VERSION "1.0.2"
 
 // ------------------------------------------------------------------- servo ---
 // D5. Avoid GPIO0/2/15: they are boot-strapping pins, and a servo signal on
 // GPIO0 at power-up drops the board into flash mode instead of booting.
 #define SERVO_PIN            14
-#define SERVO_CLOSED_ANGLE   0
-#define SERVO_OPEN_ANGLE     90
+
+// Continuous-rotation servo pulse widths: direction/speed, not positions.
+// Tune these for the hardware; 1500 us is normally neutral/stop.
+#define SERVO_OPEN_US         1000
+#define SERVO_CLOSE_US        2000
+#define SERVO_NEUTRAL_US      1500
+
+// Measured movement: 180 degrees takes 500 ms. This opens the gate by 45
+// degrees, stops, then reverses the same travel to close.
+#define SERVO_FULL_TURN_MS    500UL
+#define SERVO_GATE_DEGREES    45UL
+#define SERVO_GATE_TRAVEL_MS  ((SERVO_FULL_TURN_MS * SERVO_GATE_DEGREES + 90UL) / 180UL)
 
 // How fast food leaves the hopper with the gate open. Calibrate once: open
 // the gate for 10 seconds, weigh what came out, divide by 10. This is what
@@ -49,6 +59,31 @@
 // Safety stop. However large a command is, never hold the gate open longer
 // than this — a mis-set GRAMS_PER_SECOND should not empty the whole hopper.
 #define MAX_DISPENSE_MS      15000
+
+// Food already in the chute keeps falling after the gate receives its close
+// command. With a 50 g shortfall and a 10 g coast allowance, close at +40 g
+// so the tray settles near +50 g. Calibrate this against real dispenses.
+#define DISPENSE_COAST_G     10.0f
+
+// ------------------------------------------------------ lid sensor and UV ---
+// HC-SR04 runs at 5 V. Its Echo output MUST pass through a 5 V-to-3.3 V
+// divider before reaching D2/GPIO4; never connect Echo to the ESP8266 directly.
+#define HAS_ULTRASONIC                1
+#define ULTRASONIC_TRIG_PIN           5   // D1 / GPIO5
+#define ULTRASONIC_ECHO_PIN           4   // D2 / GPIO4, after voltage divider
+#define ULTRASONIC_SAMPLE_INTERVAL_MS 250UL
+#define ULTRASONIC_ECHO_TIMEOUT_US    30000UL
+
+// The lid is confirmed closed after three median-filtered readings at or
+// below 5 cm. UV switches off immediately at 7 cm or on any sensor timeout.
+#define LID_CLOSED_DISTANCE_CM        5.0f
+#define LID_OPEN_DISTANCE_CM          7.0f
+#define LID_CLOSED_CONFIRMATIONS      3
+
+// D0/GPIO16 drives the IN pin of an active-high 5 V MOSFET module. The MOSFET
+// supplies the UV LED; it must never be powered directly from a NodeMCU pin.
+#define UV_PIN                        16  // D0 / GPIO16
+#define UV_ACTIVE_HIGH                1
 
 // ------------------------------------------------------------------ timing ---
 #define POLL_INTERVAL_MS     1000UL      // 1 Hz, as designed
@@ -75,6 +110,12 @@
 // See docs/HARDWARE.md, "Calibrating the load cell".
 #define SCALE_TARE_RAW       0L
 #define SCALE_COUNTS_PER_G   420.0f
+
+// Conservative adaptive-safety defaults; calibrate before enabling the scale.
+#define LOAD_CELL_TOLERANCE_G 3.0f
+#define MIN_DISPENSE_G        10.0f
+#define MAX_DISPENSE_G        500.0f
+#define READING_MAX_AGE_MS    300000UL
 
 // --------------------------------------------------------------------- TLS ---
 // 0 (default): trust any certificate. The device transmits the public anon

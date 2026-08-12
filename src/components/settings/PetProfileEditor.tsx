@@ -90,7 +90,9 @@ export function PetProfileEditor({ pet, pets }: { pet: Pet; pets: Pet[] }) {
         setError(body.error ?? "บันทึกข้อมูลไม่สำเร็จ");
         return;
       }
-      setMessage(adding ? "เพิ่มสัตว์เลี้ยงแล้ว" : "บันทึกข้อมูลเรียบร้อยแล้ว");
+      setMessage(adding
+        ? "เพิ่มสัตว์เลี้ยงแล้ว"
+        : "บันทึกข้อมูลเรียบร้อยแล้ว — กดให้ AI จัดตารางอาหารเพื่อใช้ข้อมูลล่าสุด");
       setAdding(false);
       router.refresh();
     } catch {

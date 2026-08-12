@@ -19,6 +19,24 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 For the ESP8266 feeder — architecture, database, RPC reference, provisioning
 and troubleshooting — see [docs/HARDWARE.md](docs/HARDWARE.md).
 
+## AI provider setup
+
+Both VET AI chat and the feeding-schedule generator call Gemini first. When
+Gemini returns an HTTP `429` rate-limit response, Petpet automatically retries
+the same request through Meta Llama without exposing either key to the browser.
+
+Set these server-only variables locally and in Vercel:
+
+```bash
+GEMINI_API_KEY=...
+LLAMA_API_KEY=...
+# Optional: pin a model enabled in the Meta Llama account.
+LLAMA_MODEL=
+```
+
+If `LLAMA_MODEL` is blank, Petpet selects the first model available to the
+provided Llama API key. Both keys are required for the Gemini-first fallback.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
