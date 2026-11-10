@@ -276,6 +276,105 @@ export type Database = {
         };
         Relationships: [];
       };
+      launcher_commands: {
+        Row: {
+          attempts: number;
+          command: string;
+          created_at: string;
+          device_id: string;
+          error: string | null;
+          executed_at: string | null;
+          finished_at: string | null;
+          id: string;
+          interval_ms: number;
+          launched_count: number;
+          pitch_deg: number;
+          shuttle_count: number;
+          speed_pct: number;
+          status: string;
+          stop_requested: boolean;
+          updated_at: string;
+          yaw_deg: number;
+        };
+        Insert: {
+          attempts?: number;
+          command?: string;
+          created_at?: string;
+          device_id: string;
+          error?: string | null;
+          executed_at?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          interval_ms: number;
+          launched_count?: number;
+          pitch_deg: number;
+          shuttle_count: number;
+          speed_pct: number;
+          status?: string;
+          stop_requested?: boolean;
+          updated_at?: string;
+          yaw_deg: number;
+        };
+        Update: {
+          attempts?: number;
+          command?: string;
+          created_at?: string;
+          device_id?: string;
+          error?: string | null;
+          executed_at?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          interval_ms?: number;
+          launched_count?: number;
+          pitch_deg?: number;
+          shuttle_count?: number;
+          speed_pct?: number;
+          status?: string;
+          stop_requested?: boolean;
+          updated_at?: string;
+          yaw_deg?: number;
+        };
+        Relationships: [];
+      };
+      launcher_status: {
+        Row: {
+          battery_pct: number | null;
+          device_id: string;
+          firmware_version: string | null;
+          last_error: string | null;
+          last_seen_at: string | null;
+          motor_temp_c: number | null;
+          shuttles_left: number | null;
+          state: string;
+          updated_at: string;
+          wifi_rssi: number | null;
+        };
+        Insert: {
+          battery_pct?: number | null;
+          device_id: string;
+          firmware_version?: string | null;
+          last_error?: string | null;
+          last_seen_at?: string | null;
+          motor_temp_c?: number | null;
+          shuttles_left?: number | null;
+          state?: string;
+          updated_at?: string;
+          wifi_rssi?: number | null;
+        };
+        Update: {
+          battery_pct?: number | null;
+          device_id?: string;
+          firmware_version?: string | null;
+          last_error?: string | null;
+          last_seen_at?: string | null;
+          motor_temp_c?: number | null;
+          shuttles_left?: number | null;
+          state?: string;
+          updated_at?: string;
+          wifi_rssi?: number | null;
+        };
+        Relationships: [];
+      };
       pets: {
         Row: {
           age_months: number;
@@ -377,6 +476,63 @@ export type Database = {
         // one is spelled out rather than left as Json: it's the only RPC the
         // app itself calls, so `command.id` and `command.status` type-check.
         Returns: Database["public"]["Tables"]["feeder_commands"]["Row"];
+      };
+      device_poll_launcher_command: {
+        Args: { p_device_id: string; p_secret: string };
+        Returns: Json;
+      };
+      device_report_launcher_progress: {
+        Args: {
+          p_command_id: string;
+          p_device_id: string;
+          p_launched_count: number;
+          p_secret: string;
+        };
+        Returns: Json;
+      };
+      device_report_launcher_result: {
+        Args: {
+          p_command_id: string;
+          p_device_id: string;
+          p_error?: string;
+          p_launched_count?: number;
+          p_secret: string;
+          p_success: boolean;
+        };
+        Returns: Json;
+      };
+      device_report_launcher_state: {
+        Args: {
+          p_battery_pct?: number;
+          p_device_id: string;
+          p_firmware_version?: string;
+          p_last_error?: string;
+          p_motor_temp_c?: number;
+          p_secret: string;
+          p_shuttles_left?: number;
+          p_state: string;
+          p_wifi_rssi?: number;
+        };
+        Returns: Json;
+      };
+      enqueue_launcher_command: {
+        Args: {
+          p_device_id: string;
+          p_interval_ms: number;
+          p_pitch_deg: number;
+          p_shuttle_count: number;
+          p_speed_pct: number;
+          p_yaw_deg: number;
+        };
+        Returns: Database["public"]["Tables"]["launcher_commands"]["Row"];
+      };
+      launcher_health: {
+        Args: { p_device_id: string };
+        Returns: Json;
+      };
+      request_launcher_stop: {
+        Args: { p_device_id: string };
+        Returns: Database["public"]["Tables"]["launcher_commands"]["Row"];
       };
     };
     Enums: {
